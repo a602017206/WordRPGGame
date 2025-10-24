@@ -5,10 +5,9 @@ import { resolve } from 'path'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [vue()],
-  // 设置基础路径，用于 GitLab Pages 部署
-  // 如果部署到根路径，请设置为 '/'
-  // 如果部署到子路径（如 /rpggame/），请设置为 '/rpggame/'
-  base: process.env.CI ? '/' : '/',
+  // 设置基础路径，用于 GitHub Pages 部署
+  // 仓库名: WordRPGGame
+  base: process.env.CI ? '/WordRPGGame/' : '/',
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src')
