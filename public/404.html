@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loading...</title>
+  <script>
+    // GitHub Pages SPA 路由重定向解决方案
+    // 将当前路径信息存储到 sessionStorage，然后重定向到根路径
+    (function() {
+      var pathSegmentsToKeep = 1; // GitHub Pages 仓库名占用一个路径段
+      
+      var l = window.location;
+      
+      // 将当前 URL 存储到 sessionStorage
+      sessionStorage.redirect = l.href;
+      
+      // 重定向到根路径
+      l.replace(
+        l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+        l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/'
+      );
+    })();
+  </script>
+</head>
+<body>
+  <div style="text-align: center; padding: 50px; font-family: sans-serif;">
+    <h2>🎮 加载中...</h2>
+    <p>正在跳转到游戏页面...</p>
+  </div>
+</body>
+</html>
