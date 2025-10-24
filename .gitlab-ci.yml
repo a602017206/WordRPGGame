@@ -18,6 +18,8 @@ build:
   script:
     - echo "开始安装依赖..."
     - npm ci --prefer-offline --no-audit
+    - echo "开始类型检查..."
+    - npm run type-check
     - echo "开始构建项目..."
     - npm run build
     - echo "构建完成！"

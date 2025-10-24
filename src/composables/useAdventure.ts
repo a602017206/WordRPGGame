@@ -1,5 +1,5 @@
-import { ref, computed, watch } from 'vue'
-import type { Character, Enemy, BattleLog, InventoryItem, Item, ItemRarity, ItemType, ItemBinding, CharacterInventory, AccountInventory, TransferResult, TransferRequirement, CharacterCurrency, AccountCurrency } from '../types'
+import { ref, computed } from 'vue'
+import type { Character, Enemy, BattleLog, InventoryItem, Item, ItemRarity, ItemType, ItemBinding, CharacterInventory, AccountInventory, TransferResult, CharacterCurrency, AccountCurrency } from '../types'
 
 /**
  * 冒险系统 Composable

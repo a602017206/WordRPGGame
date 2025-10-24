@@ -40,6 +40,9 @@ jobs:
       - name: 安装依赖
         run: npm ci
 
+      - name: 类型检查
+        run: npm run type-check
+
       - name: 构建项目
         run: npm run build
 
