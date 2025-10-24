@@ -5,7 +5,19 @@
     <link rel="icon" type="image/svg+xml" href="/WordRPGGame/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RPG Game</title>
-    <script type="module" crossorigin src="/WordRPGGame/assets/index-fHN6ACXr.js"></script>
+    
+    <!-- GitHub Pages SPA 路由重定向解码脚本 -->
+    <script>
+      // 解码从 404.html 重定向过来的路径信息
+      (function() {
+        var redirect = sessionStorage.redirect;
+        delete sessionStorage.redirect;
+        if (redirect && redirect !== location.href) {
+          history.replaceState(null, null, redirect);
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/WordRPGGame/assets/index-Co4zdmAl.js"></script>
     <link rel="stylesheet" crossorigin href="/WordRPGGame/assets/index-wSAW9m4b.css">
   </head>
   <body>
