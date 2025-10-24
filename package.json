@@ -1,0 +1,24 @@
+{
+  "name": "rpggame",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc && vite build",
+    "preview": "vite preview",
+    "type-check": "vue-tsc --noEmit",
+    "deploy:test": "bash deploy.sh"
+  },
+  "dependencies": {
+    "vue": "^3.4.21",
+    "vue-router": "^4.6.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.1",
+    "@vitejs/plugin-vue": "^5.0.4",
+    "typescript": "^5.9.3",
+    "vite": "^5.2.0",
+    "vue-tsc": "^3.1.1"
+  }
+}
