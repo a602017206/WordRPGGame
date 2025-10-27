@@ -3,7 +3,9 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCharacterStorage } from '../composables/useCharacterStorage'
 import { useAdventure } from '../composables/useAdventure'
-import type { InventoryItem } from '../types'
+import { useSkills, SKILL_DATABASE, createSkillBook } from '../composables/useSkills'
+import SkillManager from '../components/SkillManager.vue'
+import type { InventoryItem, Skill } from '../types'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,9 +22,339 @@ if (!character.value) {
 // 初始化冒险系统
 const adventure = character.value ? useAdventure(character.value) : null
 
+// 初始化技能系统
+const skillSystem = character.value ? useSkills(character.value) : null
+
 // 显示背包
 const showInventory = ref(false)
 const inventoryTab = ref<'character' | 'account'>('character')
+
+// 使用技能书
+const useSkillBook = (skillBookId: string) => {
+  if (!adventure || !skillSystem) return { success: false, message: '系统未初始化' }
+  return adventure.useSkillBook(skillBookId)
+}
+
+// 学习技能（从技能书）
+const learnSkillFromBook = (skillBookItem: InventoryItem) => {
+  if (!adventure || !skillSystem) {
+    alert('系统未初始化')
+    return
+  }
+  
+  // 使用技能书获取技能数据
+  const result = adventure.useSkillBook(skillBookItem.item.id)
+  
+  if (!result.success || !result.skill) {
+    alert(result.message)
+    return
+  }
+  
+  // 检查是否已学习
+  const alreadyLearned = skillSystem.characterSkills.value.learnedSkills.some(
+    s => s.id === result.skill!.id
+  )
+  
+  if (alreadyLearned) {
+    // 已学习过，将技能书返还到背包
+    adventure.addItemToInventory(skillBookItem.item, 1, false)
+    alert(`已经学习过技能「${result.skill.name}」，无法重复学习！`)
+    adventure.addLog(`已经学习过技能「${result.skill.name}」`, 'info')
+    return
+  }
+  
+  // 学习技能
+  const learnResult = skillSystem.learnSkill(result.skill)
+  
+  if (learnResult.success) {
+    alert(`成功学习技能：${result.skill.icon} ${result.skill.name}！`)
+    adventure.addLog(learnResult.message, 'victory')
+    
+    // 强制保存技能数据，确保界面实时更新
+    skillSystem.saveSkills()
+  } else {
+    // 学习失败，返还技能书
+    adventure.addItemToInventory(skillBookItem.item, 1, false)
+    alert(learnResult.message)
+    adventure.addLog(learnResult.message, 'info')
+  }
+}
+
+// 检查是否为技能书
+const isSkillBook = (item: InventoryItem): boolean => {
+  return item.item.name.includes('技能书')
+}
+
+// 检查技能是否已学习
+const isSkillLearned = (skillBookItem: InventoryItem): boolean => {
+  if (!skillSystem) return false
+  
+  // 从技能书名称提取技能名（格式：XXX技能书）
+  const skillName = skillBookItem.item.name.replace('技能书', '')
+  
+  return skillSystem.characterSkills.value.learnedSkills.some(
+    s => s.name === skillName
+  )
+}
+
+// 转移技能
+const transferSkill = (skill: Skill, targetCharacterId: string) => {
+  if (!adventure) return { success: false, message: '系统未初始化' }
+  return adventure.transferSkillToCharacter(skill, targetCharacterId)
+}
+
+// 消耗金币
+const useGold = (amount: number): boolean => {
+  if (!adventure) return false
+  return adventure.spendGold(amount)
+}
+
+// 添加日志
+const addLog = (message: string, type: 'info' | 'victory' | 'defeat' = 'info') => {
+  if (!adventure) return
+  adventure.addLog(message, type)
+}
+
+// 使用技能（在战斗中）
+const useSkillInBattle = (slotIndex: number) => {
+  if (!adventure || !skillSystem || !character.value) return
+  
+  const result = skillSystem.useSkill(slotIndex, adventure.currentMp, character.value.stats)
+  
+  if (!result.success) {
+    adventure.addLog(result.message, 'info')
+    return
+  }
+  
+  // 技能使用成功
+  adventure.addLog(result.message, 'info')
+  
+  if (result.damage && result.damage > 0 && adventure.currentEnemy.value) {
+    // 对敌人造成伤害
+    adventure.currentEnemy.value.hp = Math.max(0, adventure.currentEnemy.value.hp - result.damage)
+    adventure.addLog(`造成 ${result.damage} 点伤害！`, 'damage')
+    
+    // 检查敌人是否被击败
+    if (adventure.currentEnemy.value.hp <= 0) {
+      // 调用 useAdventure 中的 handleVictory 处理胜利逻辑
+      // 需要导出 handleVictory 方法
+      handleEnemyDefeat()
+      return
+    }
+    
+    // 敌人反击
+    setTimeout(() => {
+      if (!adventure.currentEnemy.value || !adventure.isBattling.value) return
+      
+      const damage = Math.max(1, adventure.currentEnemy.value.attack - (character.value?.stats.defense || 0))
+      const variance = 0.85 + Math.random() * 0.3
+      const finalDamage = Math.floor(damage * variance)
+      
+      adventure.currentHp.value = Math.max(0, adventure.currentHp.value - finalDamage)
+      adventure.addLog(`${adventure.currentEnemy.value.name} 对你造成了 ${finalDamage} 点伤害！`, 'damage')
+      
+      if (adventure.currentHp.value <= 0) {
+        // 角色被击败
+        adventure.addLog('你被击败了...', 'defeat')
+        adventure.isBattling.value = false
+        adventure.isVictory.value = false
+        
+        // 复活并恢复部分生命
+        setTimeout(() => {
+          adventure.currentHp.value = Math.floor(character.value!.stats.hp * 0.5)
+          adventure.currentMp.value = Math.floor(character.value!.stats.mp * 0.5)
+          adventure.addLog('你在安全地点复活了...', 'heal')
+          adventure.currentEnemy.value = null
+        }, 2000)
+      }
+    }, 800)
+  } else if (result.effects) {
+    // 处理治疗等特殊效果
+    result.effects.forEach(effect => {
+      if (effect.type === 'heal' && effect.value > 0) {
+        const healAmount = effect.value
+        adventure.currentHp.value = Math.min(
+          character.value!.stats.hp,
+          adventure.currentHp.value + healAmount
+        )
+        adventure.addLog(`恢复 ${healAmount} 点生命值！`, 'heal')
+      }
+    })
+  }
+}
+
+// 处理敌人被击败
+const handleEnemyDefeat = () => {
+  if (!adventure || !adventure.currentEnemy.value || !character.value) return
+  
+  const enemy = adventure.currentEnemy.value
+  const exp = enemy.experience
+  const goldReward = enemy.goldReward
+  
+  character.value.experience += exp
+  adventure.gold.value += goldReward
+  
+  // 统计击败敌人数
+  if (!character.value.gameProgress.enemiesDefeated) {
+    character.value.gameProgress.enemiesDefeated = 0
+  }
+  character.value.gameProgress.enemiesDefeated++
+  
+  // 随机获得账号钻石（1-3钻石，10%概率）
+  const diamondReward = Math.random() < 0.1 ? Math.floor(1 + Math.random() * 3) : 0
+  if (diamondReward > 0) {
+    adventure.diamond.value += diamondReward
+    adventure.addLog(`额外获得 ${diamondReward} 钻石！`, 'victory')
+  }
+  
+  adventure.addLog(`战斗胜利！获得 ${exp} 经验值和 ${goldReward} 金币！`, 'victory')
+  
+  // 保存货币数据
+  adventure.saveCurrency()
+  
+  // 检查升级
+  checkLevelUp()
+  
+  // 随机掉落道具
+  dropRandomItem()
+  
+  adventure.isBattling.value = false
+  adventure.isVictory.value = true
+  adventure.currentEnemy.value = null
+}
+
+// 检查升级
+const checkLevelUp = () => {
+  if (!character.value) return
+  
+  const getExpNeeded = (level: number): number => {
+    return Math.floor(100 * Math.pow(1.5, level - 1))
+  }
+  
+  let expNeeded = getExpNeeded(character.value.level)
+  
+  while (character.value.experience >= expNeeded) {
+    character.value.level++
+    character.value.experience -= expNeeded
+    
+    // 提升属性
+    const statIncrease = {
+      hp: Math.floor(10 + Math.random() * 5),
+      mp: Math.floor(8 + Math.random() * 4),
+      attack: Math.floor(2 + Math.random() * 2),
+      defense: Math.floor(2 + Math.random() * 2),
+      magic: Math.floor(2 + Math.random() * 2),
+      speed: Math.floor(1 + Math.random() * 2)
+    }
+    
+    character.value.stats.hp += statIncrease.hp
+    character.value.stats.mp += statIncrease.mp
+    character.value.stats.attack += statIncrease.attack
+    character.value.stats.defense += statIncrease.defense
+    character.value.stats.magic += statIncrease.magic
+    character.value.stats.speed += statIncrease.speed
+    
+    // 恢复生命和魔法
+    if (adventure) {
+      adventure.currentHp.value = character.value.stats.hp
+      adventure.currentMp.value = character.value.stats.mp
+      
+      adventure.addLog(`🎉 恭喜升级！当前等级：${character.value.level}`, 'victory')
+      adventure.addLog(`属性提升：HP+${statIncrease.hp} MP+${statIncrease.mp} ATK+${statIncrease.attack} DEF+${statIncrease.defense} MAG+${statIncrease.magic} SPD+${statIncrease.speed}`, 'info')
+    }
+    
+    expNeeded = getExpNeeded(character.value.level)
+  }
+}
+
+// 随机掉落道具
+const dropRandomItem = () => {
+  if (!adventure) return
+  if (Math.random() > 0.75) return // 75% 掉落率（提升2.5倍）
+  
+  // 60%概率掉落技能书，40%概率掉落普通道具（原30%提升2倍）
+  // 总体技能书掉落率：75% × 60% = 45%（原9%的5倍）
+  if (Math.random() < 0.6) {
+    dropSkillBook()
+    return
+  }
+  
+  const itemTemplates = [
+    { name: '生命药水', description: '恢复50点生命值', type: 'consumable', rarity: 'common', binding: 'character', icon: '🧪' },
+    { name: '魔法药水', description: '恢复30点魔法值', type: 'consumable', rarity: 'common', binding: 'character', icon: '💙' },
+    { name: '铁剑', description: '攻击力+5', type: 'equipment', rarity: 'uncommon', binding: 'character', icon: '⚔️' },
+    { name: '皮甲', description: '防御力+3', type: 'equipment', rarity: 'uncommon', binding: 'character', icon: '🛡️' },
+    { name: '魔法石', description: '可用于道具转移', type: 'material', rarity: 'rare', binding: 'account', icon: '💎' },
+    { name: '神秘卷轴', description: '账号共享道具', type: 'quest', rarity: 'epic', binding: 'account', icon: '📜' },
+    { name: '技能转移水晶', description: '用于在角色间转移技能', type: 'material', rarity: 'legendary', binding: 'account', icon: '🔮' }
+  ]
+  
+  const template = itemTemplates[Math.floor(Math.random() * itemTemplates.length)]
+  const item: any = {
+    id: Date.now().toString() + Math.random(),
+    ...template,
+    stackable: template.type === 'consumable' || template.type === 'material',
+    maxStack: template.type === 'consumable' ? 99 : template.type === 'material' ? 999 : 1
+  }
+  
+  adventure.addItemToInventory(item, 1, template.binding === 'account')
+  adventure.addLog(`获得道具：${item.icon} ${item.name}`, 'victory')
+}
+
+// 掉落技能书
+const dropSkillBook = () => {
+  if (!adventure || !character.value) return
+  
+  // 根据角色职业和等级决定掉落的技能书
+  const availableSkills = SKILL_DATABASE.filter((skill: any) => {
+    // 排除通用技能和基础攻击
+    if (skill.skillType === 'universal' || skill.id === 'skill_basic_attack') {
+      return false
+    }
+    
+    // 70%概率掉落本职业技能书，30%概率掉落其他职业技能书
+    const isOwnClass = skill.skillType === character.value!.class.toLowerCase()
+    if (isOwnClass) {
+      return Math.random() < 0.7
+    } else {
+      return Math.random() < 0.3
+    }
+  })
+  
+  if (availableSkills.length === 0) return
+  
+  // 根据稀有度权重随机选择
+  const rarityWeights: any = {
+    common: 50,
+    uncommon: 30,
+    rare: 15,
+    epic: 4,
+    legendary: 1
+  }
+  
+  const weightedSkills = availableSkills.flatMap((skill: any) => 
+    Array(rarityWeights[skill.rarity] || 1).fill(skill)
+  )
+  
+  const randomSkill = weightedSkills[Math.floor(Math.random() * weightedSkills.length)]
+  const skillBook = createSkillBook(randomSkill)
+  
+  // 将技能书作为道具添加到背包
+  const skillBookItem: any = {
+    id: skillBook.id,
+    name: skillBook.name,
+    description: skillBook.description,
+    type: 'quest',
+    rarity: skillBook.rarity,
+    binding: skillBook.binding,
+    icon: skillBook.icon,
+    stackable: false,
+    maxStack: 1
+  }
+  
+  adventure.addItemToInventory(skillBookItem, 1, false)
+  adventure.addLog(`获得技能书：${skillBook.icon} ${skillBook.name}！`, 'victory')
+}
 
 // 转移道具
 const transferItem = (item: InventoryItem, fromAccount: boolean) => {
@@ -56,7 +388,7 @@ const getRarityColor = (rarity: string): string => {
   return colors[rarity as keyof typeof colors] || '#9e9e9e'
 }
 
-// 获取绑定类型文本
+// 获得绑定类型文本
 const getBindingText = (binding: string): string => {
   const texts = {
     character: '角色绑定',
@@ -64,6 +396,33 @@ const getBindingText = (binding: string): string => {
     transferable: '可转移'
   }
   return texts[binding as keyof typeof texts] || ''
+}
+
+// 获取技能类型对应的职业名称
+const getSkillTypeText = (skillType: string): string => {
+  const typeTexts: Record<string, string> = {
+    universal: '通用',
+    warrior: '战士',
+    mage: '法师',
+    rogue: '刺客',
+    cleric: '牧师'
+  }
+  return typeTexts[skillType] || '未知'
+}
+
+// 获取技能书的职业信息
+const getSkillBookClassInfo = (skillBookItem: InventoryItem): string => {
+  if (!skillBookItem.item.name.includes('技能书')) return ''
+  
+  // 从技能书名称提取技能名
+  const skillName = skillBookItem.item.name.replace('技能书', '')
+  
+  // 查找对应的技能
+  const skill = SKILL_DATABASE.find((s: any) => s.name === skillName)
+  
+  if (!skill) return '未知'
+  
+  return getSkillTypeText(skill.skillType)
 }
 
 // 定时保存角色数据
@@ -225,14 +584,29 @@ const goBack = () => {
                 @click="adventure.playerAttack()"
                 class="btn-action btn-attack"
               >
-                ⚔️ 攻击
+                ⚔️ 放击
               </button>
-              <button 
-                @click="adventure.useSkill()"
-                class="btn-action btn-skill"
-              >
-                ✨ 技能 (20 MP)
-              </button>
+              
+              <!-- 技能按钮 -->
+              <template v-if="skillSystem">
+                <template v-for="(skillSlot, index) in skillSystem.characterSkills.value.slots" :key="index">
+                  <button 
+                    v-if="skillSlot"
+                    @click="useSkillInBattle(index)"
+                    class="btn-action btn-skill"
+                    :disabled="skillSystem.isSkillOnCooldown(skillSlot.skill.id)"
+                    :title="`${skillSlot.skill.name} - ${skillSystem.getSkillMpCost(skillSlot.skill)} MP`"
+                  >
+                    {{ skillSlot.skill.icon }} {{ skillSlot.skill.name }}
+                    <span v-if="skillSystem.isSkillOnCooldown(skillSlot.skill.id)" class="cooldown-text">
+                      ({{ skillSystem.getSkillRemainingCooldown(skillSlot.skill.id) }}s)
+                    </span>
+                    <span v-else class="mp-cost">
+                      ({{ skillSystem.getSkillMpCost(skillSlot.skill) }} MP)
+                    </span>
+                  </button>
+                </template>
+              </template>
             </template>
             
             <button 
@@ -242,6 +616,19 @@ const goBack = () => {
             >
               😴 休息
             </button>
+          </div>
+          
+          <!-- 技能管理 -->
+          <div v-if="skillSystem" class="skill-manager-section">
+            <SkillManager 
+              :character="character"
+              :gold="adventure.gold.value"
+              :on-use-gold="useGold"
+              :on-transfer-skill="transferSkill"
+              :on-use-skill-book="useSkillBook"
+              :on-add-log="addLog"
+              :all-characters="characters"
+            />
           </div>
         </div>
       </div>
@@ -306,18 +693,39 @@ const goBack = () => {
                   {{ invItem.item.name }}
                 </div>
                 <div class="item-desc">{{ invItem.item.description }}</div>
+                
+                <!-- 技能书职业信息 -->
+                <div v-if="isSkillBook(invItem)" class="skill-book-class-info">
+                  <span class="class-label">适用职业：</span>
+                  <span class="class-value">{{ getSkillBookClassInfo(invItem) }}</span>
+                </div>
+                
                 <div class="item-meta">
                   <span class="item-binding">{{ getBindingText(invItem.item.binding) }}</span>
                   <span class="item-quantity">x{{ invItem.quantity }}</span>
                 </div>
               </div>
-              <button 
-                v-if="invItem.item.binding !== 'character'"
-                @click="transferItem(invItem, false)"
-                class="btn-transfer"
-              >
-                → 账号
-              </button>
+              
+              <!-- 技能书学习按钮 -->
+              <div class="item-actions">
+                <button 
+                  v-if="isSkillBook(invItem)"
+                  @click="learnSkillFromBook(invItem)"
+                  class="btn-learn"
+                  :class="{ 'already-learned': isSkillLearned(invItem) }"
+                  :title="isSkillLearned(invItem) ? '已学习此技能' : '点击学习技能'"
+                >
+                  {{ isSkillLearned(invItem) ? '✓ 已学习' : '📚 学习' }}
+                </button>
+                
+                <button 
+                  v-if="invItem.item.binding !== 'character'"
+                  @click="transferItem(invItem, false)"
+                  class="btn-transfer"
+                >
+                  → 账号
+                </button>
+              </div>
             </div>
             
             <div v-if="adventure.characterInventory.value.items.length === 0" class="inventory-empty">
@@ -671,6 +1079,24 @@ const goBack = () => {
   box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
 }
 
+/* 技能按钮额外样式 */
+.cooldown-text {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.mp-cost {
+  font-size: 0.8rem;
+  opacity: 0.9;
+}
+
+/* 技能管理区域 */
+.skill-manager-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
 /* 右侧面板 */
 .right-panel {
   display: flex;
@@ -881,6 +1307,62 @@ const goBack = () => {
 .item-quantity {
   color: #667eea;
   font-weight: bold;
+}
+
+/* 技能书职业信息 */
+.skill-book-class-info {
+  margin: 0.5rem 0;
+  padding: 0.4rem 0.6rem;
+  background: rgba(102, 126, 234, 0.1);
+  border-left: 3px solid #667eea;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.class-label {
+  color: rgba(255, 255, 255, 0.7);
+  margin-right: 0.5rem;
+}
+
+.class-value {
+  color: #667eea;
+  font-weight: 600;
+}
+
+/* 道具操作按钮容器 */
+.item-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* 学习按钮 */
+.btn-learn {
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.btn-learn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(240, 147, 251, 0.4);
+}
+
+.btn-learn.already-learned {
+  background: linear-gradient(135deg, #52c234 0%, #30a84b 100%);
+  cursor: default;
+  opacity: 0.7;
+}
+
+.btn-learn.already-learned:hover {
+  transform: none;
+  box-shadow: none;
 }
 
 .btn-transfer {

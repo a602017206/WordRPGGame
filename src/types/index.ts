@@ -45,6 +45,7 @@ export interface Character {
   stats: CharacterStats
   gameProgress: GameProgress
   createdAt: string
+  skills?: CharacterSkills // 技能系统（可选，保证向下兼容）
 }
 
 /**
@@ -350,4 +351,134 @@ export interface TransferRequirement {
 export interface TransferResult {
   success: boolean
   message: string
+}
+
+// ==================== 技能系统相关类型 ====================
+
+/**
+ * 技能元素类型
+ */
+export type SkillElement = 'physical' | 'fire' | 'ice' | 'lightning' | 'holy' | 'dark'
+
+/**
+ * 技能稀有度
+ */
+export type SkillRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
+
+/**
+ * 技能类型（不同职业可学习的技能）
+ */
+export type SkillType = 'warrior' | 'mage' | 'rogue' | 'cleric' | 'universal'
+
+/**
+ * 技能数据
+ */
+export interface Skill {
+  id: string
+  name: string
+  description: string
+  icon: string
+  element: SkillElement
+  rarity: SkillRarity
+  skillType: SkillType // 技能类型，决定哪些职业可以学习
+  level: number // 技能等级（1-10）
+  maxLevel: number // 最大等级
+  
+  // 技能数值
+  baseDamage: number // 基础伤害
+  damageMultiplier: number // 伤害倍率（随等级提升）
+  mpCost: number // MP消耗
+  cooldown: number // 冷却时间（秒）
+  
+  // 升级成长
+  damageGrowth: number // 每级伤害成长
+  mpCostGrowth: number // 每级MP消耗成长
+  cooldownReduction: number // 每级冷却时间减少（秒）
+  
+  // 特殊效果
+  effects?: SkillEffect[]
+}
+
+/**
+ * 技能效果
+ */
+export interface SkillEffect {
+  type: 'dot' | 'heal' | 'buff' | 'debuff' | 'stun'
+  value: number
+  duration?: number // 持续时间（秒）
+  chance?: number // 触发概率（0-1）
+}
+
+/**
+ * 技能书（道具）
+ */
+export interface SkillBook {
+  id: string
+  skillId: string // 对应的技能ID
+  name: string
+  description: string
+  icon: string
+  rarity: SkillRarity
+  skillType: SkillType // 职业限制
+  binding: ItemBinding // 绑定类型
+}
+
+/**
+ * 角色技能槽
+ */
+export interface CharacterSkill {
+  skill: Skill
+  equippedAt: number // 装备时间
+  lastUsedAt?: number // 上次使用时间
+}
+
+/**
+ * 角色技能数据
+ */
+export interface CharacterSkills {
+  characterId: string
+  slots: [CharacterSkill | null, CharacterSkill | null, CharacterSkill | null] // 3个技能槽位
+  learnedSkills: Skill[] // 已学习的技能
+}
+
+/**
+ * 技能转移道具
+ */
+export interface SkillTransferItem extends Item {
+  transferType: 'skill' // 标识为技能转移道具
+  requiredRarity?: SkillRarity // 可转移的技能稀有度限制
+}
+
+/**
+ * 技能转移结果
+ */
+export interface SkillTransferResult {
+  success: boolean
+  message: string
+  skill?: Skill
+}
+
+/**
+ * 技能使用结果
+ */
+export interface SkillUseResult {
+  success: boolean
+  damage?: number
+  mpCost: number
+  cooldown: number
+  message: string
+  effects?: SkillEffect[]
+}
+
+/**
+ * 技能升级结果
+ */
+export interface SkillUpgradeResult {
+  success: boolean
+  message: string
+  newLevel?: number
+  cost?: {
+    gold: number
+    materials?: { itemId: string; quantity: number }[]
+  }
 }

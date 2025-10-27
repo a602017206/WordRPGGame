@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
-import type { Character, Enemy, BattleLog, InventoryItem, Item, ItemRarity, ItemType, ItemBinding, CharacterInventory, AccountInventory, TransferResult, CharacterCurrency, AccountCurrency } from '../types'
+import type { Character, Enemy, BattleLog, InventoryItem, Item, ItemRarity, ItemType, ItemBinding, CharacterInventory, AccountInventory, TransferResult, CharacterCurrency, AccountCurrency, SkillBook, Skill } from '../types'
+import { SKILL_DATABASE, createSkillBook } from './useSkills'
 
 /**
  * 冒险系统 Composable
@@ -287,13 +288,20 @@ export function useAdventure(character: Character) {
   const dropRandomItem = () => {
     if (Math.random() > 0.3) return // 30% 掉落率
     
+    // 30%概率掉落技能书，70%概率掉落普通道具
+    if (Math.random() < 0.3) {
+      dropSkillBook()
+      return
+    }
+    
     const itemTemplates = [
       { name: '生命药水', description: '恢复50点生命值', type: 'consumable' as ItemType, rarity: 'common' as ItemRarity, binding: 'character' as ItemBinding, icon: '🧪' },
       { name: '魔法药水', description: '恢复30点魔法值', type: 'consumable' as ItemType, rarity: 'common' as ItemRarity, binding: 'character' as ItemBinding, icon: '💙' },
       { name: '铁剑', description: '攻击力+5', type: 'equipment' as ItemType, rarity: 'uncommon' as ItemRarity, binding: 'character' as ItemBinding, icon: '⚔️' },
       { name: '皮甲', description: '防御力+3', type: 'equipment' as ItemType, rarity: 'uncommon' as ItemRarity, binding: 'character' as ItemBinding, icon: '🛡️' },
       { name: '魔法石', description: '可用于道具转移', type: 'material' as ItemType, rarity: 'rare' as ItemRarity, binding: 'account' as ItemBinding, icon: '💎' },
-      { name: '神秘卷轴', description: '账号共享道具', type: 'quest' as ItemType, rarity: 'epic' as ItemRarity, binding: 'account' as ItemBinding, icon: '📜' }
+      { name: '神秘卷轴', description: '账号共享道具', type: 'quest' as ItemType, rarity: 'epic' as ItemRarity, binding: 'account' as ItemBinding, icon: '📜' },
+      { name: '技能转移水晶', description: '用于在角色间转移技能', type: 'material' as ItemType, rarity: 'legendary' as ItemRarity, binding: 'account' as ItemBinding, icon: '🔮' }
     ]
     
     const template = itemTemplates[Math.floor(Math.random() * itemTemplates.length)]
@@ -306,6 +314,59 @@ export function useAdventure(character: Character) {
     
     addItemToInventory(item, 1, template.binding === 'account')
     addLog(`获得道具：${item.icon} ${item.name}`, 'victory')
+  }
+  
+  // 掉落技能书
+  const dropSkillBook = () => {
+    // 根据角色职业和等级决定掉落的技能书
+    const availableSkills = SKILL_DATABASE.filter(skill => {
+      // 排除通用技能和基础攻击
+      if (skill.skillType === 'universal' || skill.id === 'skill_basic_attack') {
+        return false
+      }
+      
+      // 70%概率掉落本职业技能书，30%概率掉落其他职业技能书
+      const isOwnClass = skill.skillType === character.class.toLowerCase()
+      if (isOwnClass) {
+        return Math.random() < 0.7
+      } else {
+        return Math.random() < 0.3
+      }
+    })
+    
+    if (availableSkills.length === 0) return
+    
+    // 根据稀有度权重随机选择
+    const rarityWeights = {
+      common: 50,
+      uncommon: 30,
+      rare: 15,
+      epic: 4,
+      legendary: 1
+    }
+    
+    const weightedSkills = availableSkills.flatMap(skill => 
+      Array(rarityWeights[skill.rarity] || 1).fill(skill)
+    )
+    
+    const randomSkill = weightedSkills[Math.floor(Math.random() * weightedSkills.length)]
+    const skillBook = createSkillBook(randomSkill)
+    
+    // 将技能书作为道具添加到背包
+    const skillBookItem: Item = {
+      id: skillBook.id,
+      name: skillBook.name,
+      description: skillBook.description,
+      type: 'quest',
+      rarity: skillBook.rarity,
+      binding: skillBook.binding,
+      icon: skillBook.icon,
+      stackable: false,
+      maxStack: 1
+    }
+    
+    addItemToInventory(skillBookItem, 1, false)
+    addLog(`获得技能书：${skillBook.icon} ${skillBook.name}！`, 'victory')
   }
   
   // 添加道具到背包
@@ -531,6 +592,94 @@ export function useAdventure(character: Character) {
     }, 2000) // 每2秒执行一次
   }
   
+  // 使用技能书学习技能
+  const useSkillBook = (skillBookId: string): { success: boolean; message: string; skill?: Skill } => {
+    // 从背包中查找技能书
+    const skillBookItem = characterInventory.value.items.find(item => item.item.id === skillBookId)
+    if (!skillBookItem) {
+      return { success: false, message: '未找到该技能书' }
+    }
+    
+    // 从技能书名称中提取技能ID（格式：XXX技能书）
+    const skillName = skillBookItem.item.name.replace('技能书', '')
+    const skill = SKILL_DATABASE.find(s => s.name === skillName)
+    
+    if (!skill) {
+      return { success: false, message: '无效的技能书' }
+    }
+    
+    // 移除技能书
+    characterInventory.value.items = characterInventory.value.items.filter(item => item.item.id !== skillBookId)
+    saveInventory()
+    
+    return { 
+      success: true, 
+      message: `使用技能书，可以学习技能：${skill.name}`,
+      skill: { ...skill }
+    }
+  }
+  
+  // 技能转移（需要技能转移水晶）
+  const transferSkillToCharacter = (
+    skill: Skill,
+    targetCharacterId: string
+  ): { success: boolean; message: string } => {
+    // 检查是否有技能转移水晶
+    const transferCrystal = accountInventory.value.items.find(
+      item => item.item.name === '技能转移水晶'
+    )
+    
+    if (!transferCrystal || transferCrystal.quantity < 1) {
+      return { 
+        success: false, 
+        message: '需要技能转移水晶才能转移技能到其他角色' 
+      }
+    }
+    
+    // 消耗转移水晶
+    transferCrystal.quantity--
+    if (transferCrystal.quantity === 0) {
+      accountInventory.value.items = accountInventory.value.items.filter(
+        item => item.item.id !== transferCrystal.item.id
+      )
+    }
+    
+    // 创建技能书并保存到目标角色的临时存储
+    const skillBook = createSkillBook(skill)
+    const transferredSkills = JSON.parse(
+      localStorage.getItem('transferred_skills') || '{}'
+    )
+    
+    if (!transferredSkills[targetCharacterId]) {
+      transferredSkills[targetCharacterId] = []
+    }
+    
+    transferredSkills[targetCharacterId].push(skillBook)
+    localStorage.setItem('transferred_skills', JSON.stringify(transferredSkills))
+    
+    saveInventory()
+    
+    return {
+      success: true,
+      message: `成功转移技能 ${skill.name} 到目标角色，消耗1个技能转移水晶`
+    }
+  }
+  
+  // 接收转移的技能
+  const receiveTransferredSkills = (): SkillBook[] => {
+    const transferredSkills = JSON.parse(
+      localStorage.getItem('transferred_skills') || '{}'
+    )
+    
+    const skills = transferredSkills[character.id] || []
+    
+    // 清除已接收的技能
+    delete transferredSkills[character.id]
+    localStorage.setItem('transferred_skills', JSON.stringify(transferredSkills))
+    
+    return skills
+  }
+  
   // 停止MP自动回复
   const stopMpRegeneration = () => {
     if (mpRegenerationTimer !== null) {
@@ -581,6 +730,12 @@ export function useAdventure(character: Character) {
     spendDiamond,
     addGold,
     addDiamond,
-    stopMpRegeneration
+    stopMpRegeneration,
+    
+    // 技能相关
+    useSkillBook,
+    transferSkillToCharacter,
+    receiveTransferredSkills,
+    addLog
   }
 }

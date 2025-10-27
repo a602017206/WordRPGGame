@@ -6,6 +6,11 @@
 
 - 🎯 角色创建与管理
 - ⚔️ 回合制战斗系统
+- 📚 **多技能系统**（新！）
+  - 3个技能槽位
+  - 15+预定义技能
+  - 技能学习、升级、转移
+  - 职业限制与平衡机制
 - 📦 背包与道具系统
 - 💰 双货币系统（金币 + 钻石）
 - 📈 角色升级与属性成长
@@ -71,10 +76,18 @@ npm run deploy
 
 ## 📖 文档
 
+### 部署相关
 - [WORKFLOW_GUIDE.md](./WORKFLOW_GUIDE.md) - 自动化工作流程说明
 - [QUICK_DEPLOY.md](./QUICK_DEPLOY.md) - 快速部署指南
 - [GITHUB_PAGES_SETUP.md](./GITHUB_PAGES_SETUP.md) - GitHub Pages 详细配置
 - [DEPLOYMENT.md](./DEPLOYMENT.md) - GitLab/GitHub 部署对比
+
+### 技能系统（新！）
+- [SKILL_SYSTEM_GUIDE.md](./SKILL_SYSTEM_GUIDE.md) - 技能系统完整指南
+- [SKILL_SYSTEM_TEST.md](./SKILL_SYSTEM_TEST.md) - 技能系统测试指南
+- [SKILL_SYSTEM_SUMMARY.md](./SKILL_SYSTEM_SUMMARY.md) - 技能系统开发总结
+- [SKILL_BOOK_LEARNING_FIX.md](./SKILL_BOOK_LEARNING_FIX.md) - 技能书学习功能和等级同步修复
+- [SKILL_BOOK_QUICK_TEST.md](./SKILL_BOOK_QUICK_TEST.md) - 技能书学习快速测试指南
 
 ## 🛠️ 技术栈
 
@@ -120,6 +133,15 @@ RPGGame/
 - 4 种职业：战士、法师、刺客、牧师
 - 6 种属性：HP、MP、攻击、防御、魔力、速度
 - 等级系统与属性成长
+
+📚 技能系统（v1.0 - 2025-10-24）
+- 3个技能槽位
+- 15+预定义技能
+- 技能学习、升级、转移
+- 职业限制机制
+- 技能书随机掉落
+- 冷却时间管理
+- 平衡的数值体系
 
 ### 战斗系统
 - 回合制战斗
