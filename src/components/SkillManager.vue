@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import type { Character, Skill, SkillBook } from '../types'
-import { useSkills, SKILL_DATABASE } from '../composables/useSkills'
+import type { Character, Skill } from '../types'
+import { useSkills } from '../composables/useSkills'
 
 const props = defineProps<{
   character: Character
@@ -18,23 +18,6 @@ const skillSystem = useSkills(props.character)
 // 显示模态框
 const showSkillModal = ref(false)
 const activeTab = ref<'equipped' | 'learned' | 'transfer'>('equipped')
-
-// 技能学习
-const selectedSkillBook = ref<string | null>(null)
-
-// 学习技能（从技能书）
-const learnSkillFromBook = (skillBookId: string) => {
-  const result = props.onUseSkillBook(skillBookId)
-  if (result.success && result.skill) {
-    const learnResult = skillSystem.learnSkill(result.skill)
-    props.onAddLog(learnResult.message, learnResult.success ? 'victory' : 'info')
-    if (learnResult.success) {
-      alert(learnResult.message)
-    }
-  } else {
-    props.onAddLog(result.message, 'info')
-  }
-}
 
 // 装备技能到槽位
 const equipToSlot = (skillId: string, slotIndex: number) => {
@@ -135,12 +118,6 @@ const getSkillTypeText = (skillType: string): string => {
 // 技能槽位
 const skillSlots = computed(() => skillSystem.characterSkills.value.slots)
 const learnedSkills = computed(() => skillSystem.characterSkills.value.learnedSkills)
-
-// 获取技能书列表（从背包中查找）
-const skillBooks = computed(() => {
-  // 这里需要从props传入背包数据，暂时返回空数组
-  return []
-})
 </script>
 
 <template>
