@@ -4,7 +4,9 @@ import { useRoute, useRouter } from 'vue-router'
 import { useCharacterStorage } from '../composables/useCharacterStorage'
 import { useAdventure } from '../composables/useAdventure'
 import { useSkills, SKILL_DATABASE, createSkillBook } from '../composables/useSkills'
+import { useEquipment, getRarityColor, EQUIPMENT_DATABASE } from '../composables/useEquipment'
 import SkillManager from '../components/SkillManager.vue'
+import EquipmentManager from '../components/EquipmentManager.vue'
 import type { InventoryItem, Skill } from '../types'
 
 const route = useRoute()
@@ -25,15 +27,70 @@ const adventure = character.value ? useAdventure(character.value) : null
 // 初始化技能系统
 const skillSystem = character.value ? useSkills(character.value) : null
 
+// 初始化装备系统
+const equipmentSystem = character.value ? useEquipment(character.value) : null
+
+// 计算装备属性加成后的实际属性
+const effectiveStats = computed(() => {
+  if (!character.value || !equipmentSystem) return character.value?.stats
+  
+  const baseStats = character.value.stats
+  const equipBonus = equipmentSystem.calculateEquipmentBonus.value
+  
+  return {
+    hp: baseStats.hp + (equipBonus.hp || 0),
+    mp: baseStats.mp + (equipBonus.mp || 0),
+    attack: baseStats.attack + (equipBonus.attack || 0),
+    defense: baseStats.defense + (equipBonus.defense || 0),
+    magic: baseStats.magic + (equipBonus.magic || 0),
+    speed: baseStats.speed + (equipBonus.speed || 0)
+  }
+})
+
 // 显示背包
 const showInventory = ref(false)
+
+// 背包标签和物品过滤
 const inventoryTab = ref<'character' | 'account'>('character')
+const itemFilter = ref<'all' | 'weapon' | 'armor' | 'consumable' | 'skillbook'>('all')
+
+// 过滤物品列表
+const filteredItems = computed(() => {
+  const inventory = inventoryTab.value === 'character' 
+    ? adventure?.characterInventory.value.items 
+    : adventure?.accountInventory.value.items
+    
+  if (!inventory) return []
+  
+  if (itemFilter.value === 'all') return inventory
+  
+  if (itemFilter.value === 'skillbook') {
+    return inventory.filter(item => item.item.name.includes('技能书'))
+  }
+  
+  // 对于装备类型，需要特殊处理
+  if (itemFilter.value === 'weapon' || itemFilter.value === 'armor') {
+    return inventory.filter(item => 
+      item.item.type === itemFilter.value || 
+      (item.item.type === 'equipment' && 
+       (item.item.name.includes('剑') || item.item.name.includes('杖') || item.item.name.includes('刀')) && 
+       itemFilter.value === 'weapon') ||
+      (item.item.type === 'equipment' && 
+       (item.item.name.includes('甲') || item.item.name.includes('盾') || item.item.name.includes('盔')) && 
+       itemFilter.value === 'armor')
+    )
+  }
+  
+  return inventory.filter(item => item.item.type === itemFilter.value)
+})
 
 // 使用技能书
 const useSkillBook = (skillBookId: string) => {
   if (!adventure || !skillSystem) return { success: false, message: '系统未初始化' }
   return adventure.useSkillBook(skillBookId)
 }
+
+// 此处移除重复声明的equipItem函数
 
 // 学习技能（从技能书）
 const learnSkillFromBook = (skillBookItem: InventoryItem) => {
@@ -115,11 +172,71 @@ const addLog = (message: string, type: 'info' | 'victory' | 'defeat' = 'info') =
   adventure.addLog(message, type)
 }
 
+// 装备物品
+const equipItem = (itemId: string) => {
+  if (!adventure || !equipmentSystem || !character.value) return
+  
+  // 首先尝试直接使用itemId查找装备
+  let result = equipmentSystem.equipItem(itemId)
+  
+  // 如果失败，尝试从背包中查找匹配的装备模板
+  if (!result.success) {
+    // 从角色背包中查找物品
+    const inventoryItem = adventure.characterInventory.value.items.find(item => item.item.id === itemId)
+    if (inventoryItem && (inventoryItem.item.type === 'equipment' || inventoryItem.item.type === 'weapon' || inventoryItem.item.type === 'armor')) {
+      // 从装备数据库中查找匹配的模板（通过名称匹配）
+      const template = EQUIPMENT_DATABASE.find(e => e.name === inventoryItem.item.name)
+      
+      if (template) {
+        // 使用模板ID重新尝试装备
+        result = equipmentSystem.equipItem(template.id)
+      } else {
+        // 如果找不到完全匹配的模板，尝试通过类型和关键词匹配
+        const typeKeywords = {
+          'weapon': ['剑', '杖', '刀', '枪'],
+          'armor': ['甲', '盾', '盔', '帽', '衣', '袍'],
+          'shield': ['盾'],
+          'helmet': ['盔', '帽']
+        }
+        
+        const matchedTemplate = EQUIPMENT_DATABASE.find(e => {
+          // 检查类型匹配
+          if (e.type === 'weapon' && typeKeywords['weapon'].some(kw => inventoryItem.item.name.includes(kw))) {
+            return true
+          }
+          if (e.type === 'armor' && typeKeywords['armor'].some(kw => inventoryItem.item.name.includes(kw))) {
+            return true
+          }
+          return false
+        })
+        
+        if (matchedTemplate) {
+          result = equipmentSystem.equipItem(matchedTemplate.id)
+        }
+      }
+    }
+  }
+  
+  adventure.addLog(result.message, result.success ? 'victory' : 'info')
+  
+  if (result.success) {
+    // 强制保存并刷新，确保数据持久化
+    equipmentSystem.saveEquipment()
+    
+    // 从背包中移除已装备的物品
+    adventure.characterInventory.value.items = adventure.characterInventory.value.items.filter(
+      item => item.item.id !== itemId
+    )
+    adventure.saveInventory()
+  }
+}
+
 // 使用技能（在战斗中）
 const useSkillInBattle = (slotIndex: number) => {
   if (!adventure || !skillSystem || !character.value) return
   
-  const result = skillSystem.useSkill(slotIndex, adventure.currentMp, character.value.stats)
+  // 使用装备加成后的属性值
+  const result = skillSystem.useSkill(slotIndex, adventure.currentMp, effectiveStats.value || character.value.stats)
   
   if (!result.success) {
     adventure.addLog(result.message, 'info')
@@ -146,7 +263,9 @@ const useSkillInBattle = (slotIndex: number) => {
     setTimeout(() => {
       if (!adventure.currentEnemy.value || !adventure.isBattling.value) return
       
-      const damage = Math.max(1, adventure.currentEnemy.value.attack - (character.value?.stats.defense || 0))
+      // 使用装备加成后的防御值
+      const effectiveDefense = effectiveStats.value?.defense || character.value?.stats.defense || 0
+      const damage = Math.max(1, adventure.currentEnemy.value.attack - effectiveDefense)
       const variance = 0.85 + Math.random() * 0.3
       const finalDamage = Math.floor(damage * variance)
       
@@ -376,17 +495,7 @@ const transferItem = (item: InventoryItem, fromAccount: boolean) => {
   alert(result.message)
 }
 
-// 获取稀有度颜色
-const getRarityColor = (rarity: string): string => {
-  const colors = {
-    common: '#9e9e9e',
-    uncommon: '#4caf50',
-    rare: '#2196f3',
-    epic: '#9c27b0',
-    legendary: '#ff9800'
-  }
-  return colors[rarity as keyof typeof colors] || '#9e9e9e'
-}
+// 使用从useEquipment导入的getRarityColor函数
 
 // 获得绑定类型文本
 const getBindingText = (binding: string): string => {
@@ -461,6 +570,11 @@ onUnmounted(() => {
     })
     adventure.saveInventory()
     adventure.saveCurrency() // 保存货币数据
+    
+    // 保存装备数据
+    if (equipmentSystem) {
+      equipmentSystem.saveEquipment()
+    }
   }
 })
 
@@ -630,6 +744,18 @@ const goBack = () => {
               :all-characters="characters"
             />
           </div>
+          
+          <!-- 装备管理 -->
+          <div v-if="equipmentSystem && adventure" class="equipment-manager-section">
+            <h3 class="section-title">⚔️ 装备管理</h3>
+            <EquipmentManager 
+              :character="character"
+              :equipment-system="equipmentSystem"
+              :effective-stats="effectiveStats as unknown as Record<string, number>"
+              :on-add-log="addLog"
+              :inventory-items="adventure.characterInventory.value.items"
+            />
+          </div>
         </div>
       </div>
 
@@ -677,12 +803,46 @@ const goBack = () => {
             账号背包 ({{ adventure.accountInventory.value.items.length }}/{{ adventure.accountInventory.value.capacity }})
           </button>
         </div>
+        
+        <!-- 物品分类筛选 -->
+        <div class="inventory-filters">
+          <button 
+            :class="['filter-btn', { active: itemFilter === 'all' }]"
+            @click="itemFilter = 'all'"
+          >
+            全部
+          </button>
+          <button 
+            :class="['filter-btn', { active: itemFilter === 'weapon' }]"
+            @click="itemFilter = 'weapon'"
+          >
+            武器
+          </button>
+          <button 
+            :class="['filter-btn', { active: itemFilter === 'armor' }]"
+            @click="itemFilter = 'armor'"
+          >
+            防具
+          </button>
+          <button 
+            :class="['filter-btn', { active: itemFilter === 'consumable' }]"
+            @click="itemFilter = 'consumable'"
+          >
+            消耗品
+          </button>
+          <button 
+            :class="['filter-btn', { active: itemFilter === 'skillbook' }]"
+            @click="itemFilter = 'skillbook'"
+          >
+            技能书
+          </button>
+        </div>
 
         <div class="inventory-grid">
           <!-- 角色背包 -->
           <template v-if="inventoryTab === 'character'">
             <div 
-              v-for="invItem in adventure.characterInventory.value.items" 
+              v-for="invItem in filteredItems" 
               :key="invItem.item.id"
               class="inventory-item"
               :style="{ borderColor: getRarityColor(invItem.item.rarity) }"
@@ -706,7 +866,7 @@ const goBack = () => {
                 </div>
               </div>
               
-              <!-- 技能书学习按钮 -->
+              <!-- 物品操作按钮 -->
               <div class="item-actions">
                 <button 
                   v-if="isSkillBook(invItem)"
@@ -716,6 +876,15 @@ const goBack = () => {
                   :title="isSkillLearned(invItem) ? '已学习此技能' : '点击学习技能'"
                 >
                   {{ isSkillLearned(invItem) ? '✓ 已学习' : '📚 学习' }}
+                </button>
+                
+                <!-- 装备按钮 -->
+                <button 
+                  v-if="invItem.item.type === 'equipment'"
+                  @click="equipItem(invItem.item.id)"
+                  class="btn-equip"
+                >
+                  ⚔️ 装备
                 </button>
                 
                 <button 
@@ -771,6 +940,49 @@ const goBack = () => {
 </template>
 
 <style scoped>
+/* 装备管理器样式 */
+.equipment-manager-section {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.btn-equip {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  margin-right: 0.5rem;
+}
+
+.inventory-filters {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.filter-btn {
+  background: rgba(0, 0, 0, 0.3);
+  color: #ccc;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-btn.active {
+  background: rgba(79, 172, 254, 0.3);
+  color: white;
+  border-color: rgba(79, 172, 254, 0.5);
+}
+
 .adventure-view {
   max-width: 1400px;
   margin: 0 auto;

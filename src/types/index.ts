@@ -46,6 +46,7 @@ export interface Character {
   gameProgress: GameProgress
   createdAt: string
   skills?: CharacterSkills // 技能系统（可选，保证向下兼容）
+  equipment?: CharacterEquipment // 装备系统（可选，保证向下兼容）
 }
 
 /**
@@ -288,7 +289,7 @@ export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
 /**
  * 道具类型
  */
-export type ItemType = 'consumable' | 'equipment' | 'material' | 'quest'
+export type ItemType = 'consumable' | 'equipment' | 'material' | 'quest' | 'weapon' | 'armor'
 
 /**
  * 道具绑定类型
@@ -351,6 +352,66 @@ export interface TransferRequirement {
 export interface TransferResult {
   success: boolean
   message: string
+}
+
+// ==================== 装备系统相关类型 ====================
+
+/**
+ * 装备槽位类型
+ */
+export type EquipmentSlotType = 'weapon' | 'shield' | 'helmet' | 'armor' | 'gloves' | 'boots' | 'accessory'
+
+/**
+ * 装备品质
+ */
+export type EquipmentQuality = 'normal' | 'magic' | 'rare' | 'epic' | 'legendary'
+
+/**
+ * 装备属性加成
+ */
+export interface EquipmentBonus {
+  hp?: number
+  mp?: number
+  attack?: number
+  defense?: number
+  magic?: number
+  speed?: number
+}
+
+/**
+ * 装备数据
+ */
+export interface Equipment extends Item {
+  equipmentType: EquipmentSlotType
+  quality: EquipmentQuality
+  levelRequirement: number
+  bonus: EquipmentBonus
+  durability?: number
+  maxDurability?: number
+}
+
+/**
+ * 已装备的装备
+ */
+export interface EquippedItem {
+  equipment: Equipment
+  equippedAt: number
+}
+
+/**
+ * 角色装备栏
+ */
+export interface CharacterEquipment {
+  characterId: string
+  slots: {
+    weapon: EquippedItem | null
+    shield: EquippedItem | null
+    helmet: EquippedItem | null
+    armor: EquippedItem | null
+    gloves: EquippedItem | null
+    boots: EquippedItem | null
+    accessory: EquippedItem | null
+  }
 }
 
 // ==================== 技能系统相关类型 ====================
