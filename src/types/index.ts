@@ -7,7 +7,7 @@
 /**
  * 角色职业类型
  */
-export type CharacterClassType = 'WARRIOR' | 'MAGE' | 'ROGUE' | 'CLERIC'
+export type CharacterClassType = 'WARRIOR' | 'MAGE' | 'ROGUE' | 'CLERIC' | 'ARCHER' | 'PALADIN' | 'NECROMANCER' | 'ASSASSIN'
 
 /**
  * 角色属性
@@ -289,7 +289,7 @@ export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
 /**
  * 道具类型
  */
-export type ItemType = 'consumable' | 'equipment' | 'material' | 'quest' | 'weapon' | 'armor'
+export type ItemType = 'consumable' | 'equipment' | 'material' | 'quest' | 'weapon' | 'armor' | 'potion'
 
 /**
  * 道具绑定类型
@@ -318,6 +318,23 @@ export interface InventoryItem {
   item: Item
   quantity: number
   acquiredAt: number
+}
+
+/**
+ * 道具栏槽位
+ */
+export interface QuickSlot {
+  item: Item | null
+  quantity: number
+  cooldownEnd?: number // 冷却结束时间
+}
+
+/**
+ * 道具栏系统
+ */
+export interface QuickItemBar {
+  slots: QuickSlot[] // 默认8个槽位
+  characterId: string
 }
 
 /**
@@ -352,6 +369,35 @@ export interface TransferRequirement {
 export interface TransferResult {
   success: boolean
   message: string
+}
+
+// ==================== 商城系统相关类型 ====================
+
+/**
+ * 商店商品类型
+ */
+export interface ShopItem {
+  id: string
+  name: string
+  description: string
+  icon: string
+  rarity: ItemRarity
+  type: ItemType
+  binding: ItemBinding
+  price: {
+    gold?: number // 金币价格（普通道具区）
+    diamond?: number // 钻石价格（账号道具区）
+  }
+  stackable: boolean
+  maxStack: number
+  category: 'normal' | 'account' // 商品类别：普通道具区 | 账号道具区
+}
+
+/**
+ * 货币兑换配置
+ */
+export interface CurrencyExchangeConfig {
+  diamondToGoldRate: number // 钻石兑换金币比例（1钻石=n金币）
 }
 
 // ==================== 装备系统相关类型 ====================
@@ -429,7 +475,7 @@ export type SkillRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
 /**
  * 技能类型（不同职业可学习的技能）
  */
-export type SkillType = 'warrior' | 'mage' | 'rogue' | 'cleric' | 'universal'
+export type SkillType = 'warrior' | 'mage' | 'rogue' | 'cleric' | 'archer' | 'paladin' | 'necromancer' | 'assassin' | 'universal'
 
 /**
  * 技能数据

@@ -90,8 +90,6 @@ const useSkillBook = (skillBookId: string) => {
   return adventure.useSkillBook(skillBookId)
 }
 
-// 此处移除重复声明的equipItem函数
-
 // 学习技能（从技能书）
 const learnSkillFromBook = (skillBookItem: InventoryItem) => {
   if (!adventure || !skillSystem) {
@@ -160,6 +158,21 @@ const transferSkill = (skill: Skill, targetCharacterId: string) => {
   return adventure.transferSkillToCharacter(skill, targetCharacterId)
 }
 
+// 转移技能书道具
+const transferSkillBookItem = (skillBookItem: InventoryItem) => {
+  if (!adventure) {
+    alert('系统未初始化')
+    return
+  }
+  
+  const targetId = prompt('请输入目标角色ID（从角色列表获取）:')
+  if (!targetId) return
+  
+  const result = adventure.transferSkillBook(skillBookItem.item.id, targetId)
+  adventure.addLog(result.message, result.success ? 'victory' : 'info')
+  alert(result.message)
+}
+
 // 消耗金币
 const useGold = (amount: number): boolean => {
   if (!adventure) return false
@@ -170,6 +183,53 @@ const useGold = (amount: number): boolean => {
 const addLog = (message: string, type: 'info' | 'victory' | 'defeat' = 'info') => {
   if (!adventure) return
   adventure.addLog(message, type)
+}
+
+// 使用快捷道具
+const useQuickItem = (slotIndex: number) => {
+  if (!adventure) return
+  
+  const result = adventure.useQuickItem(slotIndex)
+  if (result.success) {
+    addLog(`${result.message} - ${result.effect}`, 'info')
+  } else {
+    addLog(result.message, 'info')
+  }
+}
+
+// 检查是否在冷却中
+const isOnCooldown = (slot: any) => {
+  if (!slot.cooldownEnd) return false
+  return Date.now() < slot.cooldownEnd
+}
+
+// 获取冷却时间
+const getCooldownTime = (slot: any) => {
+  if (!slot.cooldownEnd) return ''
+  const remaining = Math.ceil((slot.cooldownEnd - Date.now()) / 1000)
+  return remaining > 0 ? remaining : ''
+}
+
+// 放入快捷道具栏
+const placeItemInQuickBar = (invItem: InventoryItem) => {
+  if (!adventure) return
+  
+  // 显示槽位选择界面
+  const slotIndex = prompt('请选择要放入的槽位 (0-7):')
+  if (slotIndex === null) return
+  
+  const index = parseInt(slotIndex)
+  if (isNaN(index) || index < 0 || index > 7) {
+    alert('无效的槽位索引')
+    return
+  }
+  
+  const result = adventure.placeItemInQuickSlot(invItem.item.id, index)
+  addLog(result.message, result.success ? 'victory' : 'info')
+  
+  if (result.success) {
+    alert(`成功将 ${invItem.item.name} 放入快捷道具栏槽位 ${index + 1}`)
+  }
 }
 
 // 装备物品
@@ -548,6 +608,16 @@ onMounted(() => {
       })
       adventure.saveInventory()
     }, 5000)
+    
+    // 检查是否有转移的技能书需要接收
+    const transferredSkillBooks = adventure.receiveTransferredSkillBooks()
+    if (transferredSkillBooks.length > 0) {
+      transferredSkillBooks.forEach(skillBook => {
+        // 将技能书添加到角色背包
+        adventure.addItemToInventory(skillBook, 1, false)
+        adventure.addLog(`收到转移的技能书：${skillBook.name}`, 'victory')
+      })
+    }
   }
 })
 
@@ -578,18 +648,16 @@ onUnmounted(() => {
   }
 })
 
+// 返回角色列表
 const goBack = () => {
-  if (character.value && adventure) {
-    updateCharacter(character.value.id, {
-      level: character.value.level,
-      experience: character.value.experience,
-      stats: character.value.stats
-    })
-    adventure.saveInventory()
-    adventure.saveCurrency() // 保存货币数据
-  }
-  router.push('/') // 直接返回角色列表页面
+  router.push('/')
 }
+
+// 前往商店
+const goToShop = () => {
+  router.push(`/shop/${characterId.value}`)
+}
+
 </script>
 
 <template>
@@ -598,9 +666,14 @@ const goBack = () => {
     <div class="adventure-header">
       <button @click="goBack" class="btn-back">← 返回</button>
       <h1 class="page-title">冒险之旅</h1>
-      <button @click="showInventory = !showInventory" class="btn-inventory">
-        🎒 背包
-      </button>
+      <div class="header-actions">
+        <button @click="goToShop" class="btn-shop">
+          🏪 商城
+        </button>
+        <button @click="showInventory = !showInventory" class="btn-inventory">
+          🎒 背包
+        </button>
+      </div>
     </div>
 
     <div class="adventure-container">
@@ -656,6 +729,32 @@ const goBack = () => {
             </div>
             <div class="stat-bar-bg">
               <div class="stat-bar exp-bar" :style="{ width: adventure.expPercentage.value + '%' }"></div>
+            </div>
+          </div>
+
+          <!-- 道具栏 -->
+          <div class="quick-item-bar">
+            <h4>快捷道具栏</h4>
+            <div class="quick-slots">
+              <div 
+                v-for="(slot, index) in adventure.quickItemBar.value.slots" 
+                :key="index"
+                class="quick-slot"
+                :class="{ 'empty': !slot.item, 'cooldown': isOnCooldown(slot) }"
+                @click="useQuickItem(index)"
+                :title="slot.item ? `${slot.item.name} (x${slot.quantity})` : '空槽位'"
+              >
+                <div v-if="slot.item" class="slot-content">
+                  <div class="item-icon">{{ slot.item.icon }}</div>
+                  <div class="item-count">x{{ slot.quantity }}</div>
+                  <div v-if="isOnCooldown(slot)" class="cooldown-overlay">
+                    {{ getCooldownTime(slot) }}
+                  </div>
+                </div>
+                <div v-else class="slot-content">
+                  <div class="empty-icon">+</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -877,6 +976,24 @@ const goBack = () => {
                 >
                   {{ isSkillLearned(invItem) ? '✓ 已学习' : '📚 学习' }}
                 </button>
+                <button 
+                  v-if="isSkillBook(invItem)"
+                  @click="transferSkillBookItem(invItem)"
+                  class="btn-transfer-skillbook"
+                  title="转移技能书到其他角色"
+                >
+                  🔄 转移
+                </button>
+                
+                <!-- 放入道具栏按钮 -->
+                <button 
+                  v-if="invItem.item.type === 'consumable' || invItem.item.type === 'potion'"
+                  @click="placeItemInQuickBar(invItem)"
+                  class="btn-quick-slot"
+                  title="放入快捷道具栏"
+                >
+                  🚀 放入
+                </button>
                 
                 <!-- 装备按钮 -->
                 <button 
@@ -959,6 +1076,28 @@ const goBack = () => {
   margin-right: 0.5rem;
 }
 
+.btn-transfer-skillbook {
+  background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  margin-right: 0.5rem;
+}
+
+.btn-quick-slot {
+  background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  margin-right: 0.5rem;
+}
+
 .inventory-filters {
   display: flex;
   gap: 0.5rem;
@@ -1000,8 +1139,14 @@ const goBack = () => {
   border-bottom: 2px solid rgba(255, 255, 255, 0.1);
 }
 
+.header-actions {
+  display: flex;
+  gap: 1rem;
+}
+
 .btn-back,
-.btn-inventory {
+.btn-inventory,
+.btn-shop {
   padding: 0.75rem 1.5rem;
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
@@ -1013,18 +1158,40 @@ const goBack = () => {
 }
 
 .btn-back:hover,
-.btn-inventory:hover {
+.btn-inventory:hover,
+.btn-shop:hover {
   background: rgba(255, 255, 255, 0.15);
   transform: translateY(-2px);
 }
 
-.page-title {
-  margin: 0;
-  font-size: 2rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+/* 商店按钮特殊样式 */
+.btn-shop {
+  background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+  color: #000;
+  font-weight: 600;
+}
+
+.btn-shop:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+}
+
+/* 商店按钮样式 */
+.btn-shop {
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.btn-shop:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
 }
 
 /* 冒险容器 */
@@ -1047,6 +1214,100 @@ const goBack = () => {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   padding: 1.5rem;
+}
+
+/* 道具栏 */
+.quick-item-bar {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.quick-item-bar h4 {
+  margin: 0 0 0.75rem 0;
+  color: #fff;
+  font-size: 1rem;
+}
+
+.quick-slots {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.quick-slot {
+  width: 50px;
+  height: 50px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.quick-slot:hover {
+  border-color: rgba(79, 172, 254, 0.5);
+  background: rgba(79, 172, 254, 0.1);
+}
+
+.quick-slot.empty {
+  border-style: dashed;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.quick-slot.cooldown {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.slot-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.item-icon {
+  font-size: 1.5rem;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.item-count {
+  font-size: 0.7rem;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 0 0.25rem;
+  border-radius: 4px;
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+}
+
+.empty-icon {
+  font-size: 1.5rem;
+  opacity: 0.3;
+}
+
+.cooldown-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  color: #fff;
+  border-radius: 6px;
 }
 
 .character-header {

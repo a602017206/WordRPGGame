@@ -12,6 +12,18 @@ import type {
 /**
  * 技能数据库 - 预定义的技能模板
  */
+// 职业技能上限配置
+export const CLASS_SKILL_LIMITS: Record<CharacterClassType, number> = {
+  WARRIOR: 8,
+  MAGE: 12,
+  ROGUE: 10,
+  CLERIC: 10,
+  ARCHER: 9,
+  PALADIN: 8,
+  NECROMANCER: 11,
+  ASSASSIN: 9
+}
+
 export const SKILL_DATABASE: Skill[] = [
   // ==================== 通用技能 ====================
   {
@@ -273,6 +285,248 @@ export const SKILL_DATABASE: Skill[] = [
     effects: [
       { type: 'buff', value: 10, duration: 10, chance: 1.0 }
     ]
+  },
+  
+  // ==================== 弓箭手技能 ====================
+  {
+    id: 'skill_archer_piercing_shot',
+    name: '穿刺射击',
+    description: '强力的远程攻击，无视部分防御',
+    icon: '🎯',
+    element: 'physical',
+    rarity: 'common',
+    skillType: 'archer',
+    level: 1,
+    maxLevel: 10,
+    baseDamage: 32,
+    damageMultiplier: 1.9,
+    mpCost: 18,
+    cooldown: 5,
+    damageGrowth: 6,
+    mpCostGrowth: 2,
+    cooldownReduction: 0.3
+  },
+  {
+    id: 'skill_archer_multishot',
+    name: '多重射击',
+    description: '同时射击多个目标',
+    icon: '🏹',
+    element: 'physical',
+    rarity: 'uncommon',
+    skillType: 'archer',
+    level: 1,
+    maxLevel: 10,
+    baseDamage: 25,
+    damageMultiplier: 1.5,
+    mpCost: 28,
+    cooldown: 8,
+    damageGrowth: 5,
+    mpCostGrowth: 3,
+    cooldownReduction: 0.5
+  },
+  {
+    id: 'skill_archer_eagle_eye',
+    name: '鹰眼',
+    description: '提升暴击率和命中率',
+    icon: '🦅',
+    element: 'physical',
+    rarity: 'rare',
+    skillType: 'archer',
+    level: 1,
+    maxLevel: 10,
+    baseDamage: 0,
+    damageMultiplier: 0,
+    mpCost: 30,
+    cooldown: 15,
+    damageGrowth: 0,
+    mpCostGrowth: 3,
+    cooldownReduction: 1.0,
+    effects: [
+      { type: 'buff', value: 15, duration: 8, chance: 1.0 }
+    ]
+  },
+  
+  // ==================== 圣骑士技能 ====================
+  {
+    id: 'skill_paladin_holy_strike',
+    name: '神圣打击',
+    description: '附带神圣之力的强力攻击',
+    icon: '⚔️',
+    element: 'holy',
+    rarity: 'common',
+    skillType: 'paladin',
+    level: 1,
+    maxLevel: 10,
+    baseDamage: 30,
+    damageMultiplier: 1.7,
+    mpCost: 22,
+    cooldown: 6,
+    damageGrowth: 6,
+    mpCostGrowth: 2,
+    cooldownReduction: 0.4
+  },
+  {
+    id: 'skill_paladin_divine_shield',
+    name: '神圣护盾',
+    description: '获得一段时间的无敌护盾',
+    icon: '🛡️',
+    element: 'holy',
+    rarity: 'uncommon',
+    skillType: 'paladin',
+    level: 1,
+    maxLevel: 10,
+    baseDamage: 0,
+    damageMultiplier: 0,
+    mpCost: 35,
+    cooldown: 20,
+    damageGrowth: 0,
+    mpCostGrowth: 4,
+    cooldownReduction: 1.0,
+    effects: [
+      { type: 'buff', value: 50, duration: 5, chance: 1.0 }
+    ]
+  },
+  {
+    id: 'skill_paladin_judgment',
+    name: '审判',
+    description: '神圣审判，对敌人造成巨额伤害',
+    icon: '⚖️',
+    element: 'holy',
+    rarity: 'rare',
+    skillType: 'paladin',
+    level: 1,
+    maxLevel: 10,
+    baseDamage: 55,
+    damageMultiplier: 2.3,
+    mpCost: 45,
+    cooldown: 18,
+    damageGrowth: 11,
+    mpCostGrowth: 5,
+    cooldownReduction: 1.2
+  },
+  
+  // ==================== 死灵法师技能 ====================
+  {
+    id: 'skill_necromancer_drain_life',
+    name: '生命汲取',
+    description: '吸取敌人生命值恢复自身',
+    icon: '🧟',
+    element: 'dark',
+    rarity: 'common',
+    skillType: 'necromancer',
+    level: 1,
+    maxLevel: 10,
+    baseDamage: 25,
+    damageMultiplier: 1.6,
+    mpCost: 20,
+    cooldown: 7,
+    damageGrowth: 5,
+    mpCostGrowth: 2,
+    cooldownReduction: 0.5,
+    effects: [
+      { type: 'heal', value: 20, duration: 0, chance: 1.0 }
+    ]
+  },
+  {
+    id: 'skill_necromancer_curse',
+    name: '诅咒',
+    description: '诅咒敌人，降低其属性',
+    icon: '💀',
+    element: 'dark',
+    rarity: 'uncommon',
+    skillType: 'necromancer',
+    level: 1,
+    maxLevel: 10,
+    baseDamage: 0,
+    damageMultiplier: 0,
+    mpCost: 25,
+    cooldown: 12,
+    damageGrowth: 0,
+    mpCostGrowth: 3,
+    cooldownReduction: 0.8,
+    effects: [
+      { type: 'debuff', value: -8, duration: 6, chance: 1.0 }
+    ]
+  },
+  {
+    id: 'skill_necromancer_summon_skeleton',
+    name: '召唤骷髅',
+    description: '召唤骷髅战士协助战斗',
+    icon: '💀',
+    element: 'dark',
+    rarity: 'rare',
+    skillType: 'necromancer',
+    level: 1,
+    maxLevel: 10,
+    baseDamage: 0,
+    damageMultiplier: 0,
+    mpCost: 40,
+    cooldown: 25,
+    damageGrowth: 0,
+    mpCostGrowth: 4,
+    cooldownReduction: 1.5
+  },
+  
+  // ==================== 暗杀者技能 ====================
+  {
+    id: 'skill_assassin_shadow_step',
+    name: '暗影步',
+    description: '瞬间移动到敌人身后进行攻击',
+    icon: '👻',
+    element: 'dark',
+    rarity: 'common',
+    skillType: 'assassin',
+    level: 1,
+    maxLevel: 10,
+    baseDamage: 38,
+    damageMultiplier: 2.1,
+    mpCost: 20,
+    cooldown: 8,
+    damageGrowth: 7,
+    mpCostGrowth: 2,
+    cooldownReduction: 0.6
+  },
+  {
+    id: 'skill_assassin_bleed',
+    name: '流血',
+    description: '使敌人持续流血',
+    icon: '🩸',
+    element: 'physical',
+    rarity: 'uncommon',
+    skillType: 'assassin',
+    level: 1,
+    maxLevel: 10,
+    baseDamage: 22,
+    damageMultiplier: 1.3,
+    mpCost: 24,
+    cooldown: 10,
+    damageGrowth: 4,
+    mpCostGrowth: 3,
+    cooldownReduction: 0.7,
+    effects: [
+      { type: 'dot', value: 6, duration: 4, chance: 0.8 }
+    ]
+  },
+  {
+    id: 'skill_assassin_death_mark',
+    name: '死亡标记',
+    description: '标记敌人，大幅提升暴击伤害',
+    icon: '☠️',
+    element: 'dark',
+    rarity: 'epic',
+    skillType: 'assassin',
+    level: 1,
+    maxLevel: 10,
+    baseDamage: 0,
+    damageMultiplier: 0,
+    mpCost: 38,
+    cooldown: 22,
+    damageGrowth: 0,
+    mpCostGrowth: 4,
+    cooldownReduction: 1.3,
+    effects: [
+      { type: 'buff', value: 25, duration: 7, chance: 1.0 }
+    ]
   }
 ]
 
@@ -284,7 +538,11 @@ export function getDefaultSkillForClass(classType: CharacterClassType): Skill {
     WARRIOR: 'skill_warrior_slash',
     MAGE: 'skill_mage_fireball',
     ROGUE: 'skill_rogue_backstab',
-    CLERIC: 'skill_cleric_heal'
+    CLERIC: 'skill_cleric_heal',
+    ARCHER: 'skill_basic_attack',
+    PALADIN: 'skill_warrior_slash',
+    NECROMANCER: 'skill_mage_fireball',
+    ASSASSIN: 'skill_rogue_backstab'
   }
   
   const skillId = defaultSkills[classType]
@@ -365,6 +623,12 @@ export function useSkills(character: Character) {
     const alreadyLearned = characterSkills.value.learnedSkills.some(s => s.id === skill.id)
     if (alreadyLearned) {
       return { can: false, reason: '已经学习过此技能' }
+    }
+    
+    // 检查职业技能上限
+    const classLimit = CLASS_SKILL_LIMITS[character.class] || 10
+    if (characterSkills.value.learnedSkills.length >= classLimit) {
+      return { can: false, reason: `该职业最多只能学习${classLimit}个技能` }
     }
     
     return { can: true }
@@ -601,6 +865,49 @@ export function useSkills(character: Character) {
     return Math.floor(100 * skill.level * multiplier)
   }
   
+  // 接收转移的技能
+  const receiveTransferredSkills = (): SkillBook[] => {
+    const transferredSkills = JSON.parse(
+      localStorage.getItem('transferred_skills') || '{}'
+    )
+    
+    const skills = transferredSkills[character.id] || []
+    
+    // 清除已接收的技能
+    delete transferredSkills[character.id]
+    localStorage.setItem('transferred_skills', JSON.stringify(transferredSkills))
+    
+    return skills
+  }
+  
+  // 学习转移的技能
+  const learnTransferredSkill = (skillBook: SkillBook): { success: boolean; message: string; skill?: Skill } => {
+    // 从技能数据库中查找对应的技能
+    const skill = SKILL_DATABASE.find(s => s.id === skillBook.skillId)
+    
+    if (!skill) {
+      return { success: false, message: '无效的技能书' }
+    }
+    
+    // 检查是否可以学习该技能
+    const checkResult = canLearnSkill(skill)
+    if (!checkResult.can) {
+      return { success: false, message: checkResult.reason || '无法学习此技能' }
+    }
+    
+    // 添加到已学习技能列表
+    const skillCopy = { ...skill, level: 1 }
+    characterSkills.value.learnedSkills.push(skillCopy)
+    
+    saveSkills()
+    
+    return { 
+      success: true, 
+      message: `成功学习转移的技能：${skill.name}`,
+      skill: skillCopy
+    }
+  }
+  
   // 保存技能数据
   const saveSkills = () => {
     // 保存到 character 对象
@@ -743,6 +1050,8 @@ export function useSkills(character: Character) {
     getSkillRemainingCooldown,
     calculateUpgradeCost,
     saveSkills,
-    loadSkills
+    loadSkills,
+    receiveTransferredSkills,
+    learnTransferredSkill
   }
 }

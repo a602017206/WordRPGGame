@@ -63,6 +63,58 @@ export const CHARACTER_CLASSES: CharacterClasses = {
       speed: 9
     },
     icon: '✨'
+  },
+  ARCHER: {
+    name: '弓箭手',
+    description: '远程攻击专家，拥有高敏捷和暴击率',
+    baseStats: {
+      hp: 85,
+      mp: 60,
+      attack: 14,
+      defense: 7,
+      magic: 6,
+      speed: 14
+    },
+    icon: '🏹'
+  },
+  PALADIN: {
+    name: '圣骑士',
+    description: '兼具攻击力和防御力的神圣战士',
+    baseStats: {
+      hp: 110,
+      mp: 70,
+      attack: 12,
+      defense: 14,
+      magic: 10,
+      speed: 7
+    },
+    icon: '🛡️'
+  },
+  NECROMANCER: {
+    name: '死灵法师',
+    description: '操控死亡之力的黑暗法师',
+    baseStats: {
+      hp: 80,
+      mp: 110,
+      attack: 7,
+      defense: 6,
+      magic: 16,
+      speed: 11
+    },
+    icon: '☠️'
+  },
+  ASSASSIN: {
+    name: '暗杀者',
+    description: '致命的暗影刺客，拥有极高暴击和闪避',
+    baseStats: {
+      hp: 85,
+      mp: 55,
+      attack: 16,
+      defense: 6,
+      magic: 9,
+      speed: 18
+    },
+    icon: '🗡️'
   }
 }
 

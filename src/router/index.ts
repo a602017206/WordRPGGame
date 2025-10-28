@@ -4,6 +4,7 @@ import SaveManagementView from '../views/SaveManagementView.vue'
 import CharacterCreationView from '../views/CharacterCreationView.vue'
 import CharacterDetailView from '../views/CharacterDetailView.vue'
 import AdventureView from '../views/AdventureView.vue'
+import ShopView from '../views/ShopView.vue'
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -44,6 +45,14 @@ const routes: Array<RouteRecordRaw> = [
     component: AdventureView,
     meta: {
       title: '冒险之旅'
+    }
+  },
+  {
+    path: '/shop/:id',
+    name: 'Shop',
+    component: ShopView,
+    meta: {
+      title: '商城系统'
     }
   },
   {

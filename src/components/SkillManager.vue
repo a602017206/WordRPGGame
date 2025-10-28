@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import type { Character, Skill } from '../types'
-import { useSkills } from '../composables/useSkills'
+import { useSkills, CLASS_SKILL_LIMITS } from '../composables/useSkills'
 
 const props = defineProps<{
   character: Character
@@ -18,6 +18,24 @@ const skillSystem = useSkills(props.character)
 // 显示模态框
 const showSkillModal = ref(false)
 const activeTab = ref<'equipped' | 'learned' | 'transfer'>('equipped')
+
+// 组件挂载时检查是否有转移的技能需要接收
+onMounted(() => {
+  // 检查是否有转移的技能
+  const transferredSkills = skillSystem.receiveTransferredSkills()
+  if (transferredSkills.length > 0) {
+    transferredSkills.forEach(skillBook => {
+      const result = skillSystem.learnTransferredSkill(skillBook)
+      props.onAddLog(result.message, result.success ? 'victory' : 'info')
+      if (result.success) {
+        console.log(`✅ 成功学习转移的技能: ${result.skill?.name}`)
+      }
+    })
+  }
+  
+  // 检查是否有转移的技能书
+  // 注意：这部分需要在Adventure系统中处理，因为技能书是作为物品存储的
+})
 
 // 装备技能到槽位
 const equipToSlot = (skillId: string, slotIndex: number) => {
@@ -145,6 +163,10 @@ const learnedSkills = computed(() => skillSystem.characterSkills.value.learnedSk
       <div class="skill-modal-content">
         <div class="skill-modal-header">
           <h2>📚 技能管理系统</h2>
+          <div class="character-info">
+            <span class="class-name">{{ character.className }}</span>
+            <span class="skill-points">剩余技能点: {{ (CLASS_SKILL_LIMITS[character.class] || 10) - learnedSkills.length }}</span>
+          </div>
           <button @click="showSkillModal = false" class="btn-close">✕</button>
         </div>
 
@@ -435,6 +457,23 @@ const learnedSkills = computed(() => skillSystem.characterSkills.value.learnedSk
   margin: 0;
   color: #fff;
   font-size: 1.5rem;
+}
+
+.character-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.class-name {
+  font-weight: bold;
+  font-size: 1.1rem;
+  color: #63b3ed;
+}
+
+.skill-points {
+  font-size: 0.9rem;
+  color: #a0aec0;
 }
 
 .btn-close {

@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import type { Character, Enemy, BattleLog, InventoryItem, Item, ItemRarity, ItemType, ItemBinding, CharacterInventory, AccountInventory, TransferResult, CharacterCurrency, AccountCurrency, SkillBook, Skill } from '../types'
+import type { Character, Enemy, BattleLog, InventoryItem, Item, ItemRarity, ItemType, ItemBinding, CharacterInventory, AccountInventory, TransferResult, CharacterCurrency, AccountCurrency, SkillBook, Skill, QuickItemBar } from '../types'
 import { SKILL_DATABASE, createSkillBook } from './useSkills'
 
 /**
@@ -40,6 +40,12 @@ export function useAdventure(character: Character) {
   const accountInventory = ref<AccountInventory>({
     items: [],
     capacity: 100
+  })
+  
+  // 道具栏系统
+  const quickItemBar = ref<QuickItemBar>({
+    slots: Array(8).fill(null).map(() => ({ item: null, quantity: 0 })),
+    characterId: character.id
   })
   
   // 计算属性
@@ -482,6 +488,7 @@ export function useAdventure(character: Character) {
   const saveInventory = () => {
     localStorage.setItem(`character_inventory_${character.id}`, JSON.stringify(characterInventory.value))
     localStorage.setItem('account_inventory', JSON.stringify(accountInventory.value))
+    localStorage.setItem(`quick_item_bar_${character.id}`, JSON.stringify(quickItemBar.value))
   }
   
   // 加载背包数据
@@ -494,6 +501,11 @@ export function useAdventure(character: Character) {
     const accountData = localStorage.getItem('account_inventory')
     if (accountData) {
       accountInventory.value = JSON.parse(accountData)
+    }
+    
+    const quickBarData = localStorage.getItem(`quick_item_bar_${character.id}`)
+    if (quickBarData) {
+      quickItemBar.value = JSON.parse(quickBarData)
     }
   }
   
@@ -562,6 +574,102 @@ export function useAdventure(character: Character) {
     saveCurrency()
   }
   
+  // 道具栏操作函数
+  
+  // 将物品放入道具栏
+  const placeItemInQuickSlot = (itemId: string, slotIndex: number): { success: boolean; message: string } => {
+    // 从背包中查找物品
+    const inventoryItem = characterInventory.value.items.find(item => item.item.id === itemId)
+    if (!inventoryItem) {
+      return { success: false, message: '未找到该物品' }
+    }
+    
+    // 检查是否为消耗品
+    if (inventoryItem.item.type !== 'consumable' && inventoryItem.item.type !== 'potion') {
+      return { success: false, message: '只能将消耗品放入道具栏' }
+    }
+    
+    // 放入道具栏
+    quickItemBar.value.slots[slotIndex] = {
+      item: inventoryItem.item,
+      quantity: inventoryItem.quantity
+    }
+    
+    saveInventory()
+    return { success: true, message: `物品已放入道具栏槽位 ${slotIndex + 1}` }
+  }
+  
+  // 从道具栏移除物品
+  const removeItemFromQuickSlot = (slotIndex: number): { success: boolean; message: string } => {
+    if (slotIndex < 0 || slotIndex >= quickItemBar.value.slots.length) {
+      return { success: false, message: '无效的槽位索引' }
+    }
+    
+    const slot = quickItemBar.value.slots[slotIndex]
+    if (!slot.item) {
+      return { success: false, message: '该槽位为空' }
+    }
+    
+    quickItemBar.value.slots[slotIndex] = { item: null, quantity: 0 }
+    saveInventory()
+    return { success: true, message: '物品已从道具栏移除' }
+  }
+  
+  // 使用道具栏中的物品
+  const useQuickItem = (slotIndex: number): { success: boolean; message: string; effect?: string } => {
+    if (slotIndex < 0 || slotIndex >= quickItemBar.value.slots.length) {
+      return { success: false, message: '无效的槽位索引' }
+    }
+    
+    const slot = quickItemBar.value.slots[slotIndex]
+    if (!slot.item) {
+      return { success: false, message: '该槽位为空' }
+    }
+    
+    // 检查冷却时间
+    const now = Date.now()
+    if (slot.cooldownEnd && now < slot.cooldownEnd) {
+      const remaining = Math.ceil((slot.cooldownEnd - now) / 1000)
+      return { success: false, message: `物品冷却中，剩余 ${remaining} 秒` }
+    }
+    
+    // 根据物品类型执行不同效果
+    let effectMessage = ''
+    
+    if (slot.item.name.includes('生命药水')) {
+      const healAmount = 50 // 固定恢复50点生命值
+      currentHp.value = Math.min(character.stats.hp, currentHp.value + healAmount)
+      effectMessage = `恢复 ${healAmount} 点生命值`
+    } else if (slot.item.name.includes('魔法药水')) {
+      const mpAmount = 30 // 固定恢复30点魔法值
+      currentMp.value = Math.min(character.stats.mp, currentMp.value + mpAmount)
+      effectMessage = `恢复 ${mpAmount} 点魔法值`
+    } else if (slot.item.name.includes('增幅药水')) {
+      // 增幅药水效果：临时提升属性
+      effectMessage = '临时提升属性（效果待实现）'
+    } else {
+      return { success: false, message: '未知的物品类型' }
+    }
+    
+    // 减少数量
+    slot.quantity--
+    
+    // 如果数量为0，清空槽位
+    if (slot.quantity <= 0) {
+      quickItemBar.value.slots[slotIndex] = { item: null, quantity: 0 }
+    } else {
+      // 设置冷却时间（30秒）
+      slot.cooldownEnd = now + 30000
+    }
+    
+    saveInventory()
+    return { 
+      success: true, 
+      message: `使用 ${slot.item.name}`,
+      effect: effectMessage
+    }
+  }
+  
   // MP自动回复机制
   const startMpRegeneration = () => {
     // 清除已存在的定时器
@@ -619,29 +727,123 @@ export function useAdventure(character: Character) {
     }
   }
   
+  // 转移技能书道具（不学习，直接转移）
+  const transferSkillBook = (skillBookId: string, targetCharacterId: string): { success: boolean; message: string } => {
+    // 从背包中查找技能书
+    const skillBookItem = characterInventory.value.items.find(item => item.item.id === skillBookId)
+    if (!skillBookItem) {
+      return { success: false, message: '未找到该技能书' }
+    }
+    
+    // 检查是否有技能转移水晶（使用更宽松的匹配方式）
+    const transferCrystal = accountInventory.value.items.find(
+      item => item.item.name.includes('技能转移水晶') || item.item.name === '技能转移水晶'
+    )
+    
+    if (!transferCrystal || transferCrystal.quantity < 1) {
+      // 调试信息：显示账号背包中的所有物品
+      console.log('账号背包物品列表:', accountInventory.value.items.map(item => ({
+        name: item.item.name,
+        quantity: item.quantity
+      })))
+      
+      return { 
+        success: false, 
+        message: '需要技能转移水晶才能转移技能书到其他角色' 
+      }
+    }
+    
+    // 创建技能书并保存到目标角色的临时存储
+    const transferredSkillBooks = JSON.parse(
+      localStorage.getItem('transferred_skill_books') || '{}'
+    )
+    
+    if (!transferredSkillBooks[targetCharacterId]) {
+      transferredSkillBooks[targetCharacterId] = []
+    }
+    
+    // 保存技能书信息
+    transferredSkillBooks[targetCharacterId].push({
+      id: skillBookItem.item.id,
+      name: skillBookItem.item.name,
+      description: skillBookItem.item.description,
+      icon: skillBookItem.item.icon,
+      rarity: skillBookItem.item.rarity,
+      binding: skillBookItem.item.binding,
+      type: skillBookItem.item.type,
+      stackable: skillBookItem.item.stackable,
+      maxStack: skillBookItem.item.maxStack
+    })
+    
+    try {
+      localStorage.setItem('transferred_skill_books', JSON.stringify(transferredSkillBooks))
+      
+      // 从当前角色背包中移除技能书
+      characterInventory.value.items = characterInventory.value.items.filter(
+        item => item.item.id !== skillBookId
+      )
+      
+      saveInventory()
+      
+      // 消耗转移水晶（只有在成功转移后才消耗）
+      transferCrystal.quantity--
+      if (transferCrystal.quantity === 0) {
+        accountInventory.value.items = accountInventory.value.items.filter(
+          item => item.item.id !== transferCrystal.item.id
+        )
+      }
+      
+      saveInventory()
+      
+      return {
+        success: true,
+        message: `成功转移技能书 ${skillBookItem.item.name} 到目标角色，消耗1个技能转移水晶`
+      }
+    } catch (error) {
+      console.error('技能书转移失败:', error)
+      return {
+        success: false,
+        message: '技能书转移失败，请重试'
+      }
+    }
+  }
+  
+  // 接收转移的技能书
+  const receiveTransferredSkillBooks = (): Item[] => {
+    const transferredSkillBooks = JSON.parse(
+      localStorage.getItem('transferred_skill_books') || '{}'
+    )
+    
+    const skillBooks = transferredSkillBooks[character.id] || []
+    
+    // 清除已接收的技能书
+    delete transferredSkillBooks[character.id]
+    localStorage.setItem('transferred_skill_books', JSON.stringify(transferredSkillBooks))
+    
+    return skillBooks
+  }
+  
   // 技能转移（需要技能转移水晶）
   const transferSkillToCharacter = (
     skill: Skill,
     targetCharacterId: string
   ): { success: boolean; message: string } => {
-    // 检查是否有技能转移水晶
+    // 检查是否有技能转移水晶（使用更宽松的匹配方式）
     const transferCrystal = accountInventory.value.items.find(
-      item => item.item.name === '技能转移水晶'
+      item => item.item.name.includes('技能转移水晶') || item.item.name === '技能转移水晶'
     )
     
     if (!transferCrystal || transferCrystal.quantity < 1) {
+      // 调试信息：显示账号背包中的所有物品
+      console.log('账号背包物品列表:', accountInventory.value.items.map(item => ({
+        name: item.item.name,
+        quantity: item.quantity
+      })))
+      
       return { 
         success: false, 
         message: '需要技能转移水晶才能转移技能到其他角色' 
       }
-    }
-    
-    // 消耗转移水晶
-    transferCrystal.quantity--
-    if (transferCrystal.quantity === 0) {
-      accountInventory.value.items = accountInventory.value.items.filter(
-        item => item.item.id !== transferCrystal.item.id
-      )
     }
     
     // 创建技能书并保存到目标角色的临时存储
@@ -655,13 +857,30 @@ export function useAdventure(character: Character) {
     }
     
     transferredSkills[targetCharacterId].push(skillBook)
-    localStorage.setItem('transferred_skills', JSON.stringify(transferredSkills))
     
-    saveInventory()
-    
-    return {
-      success: true,
-      message: `成功转移技能 ${skill.name} 到目标角色，消耗1个技能转移水晶`
+    try {
+      localStorage.setItem('transferred_skills', JSON.stringify(transferredSkills))
+      
+      // 消耗转移水晶（只有在成功转移后才消耗）
+      transferCrystal.quantity--
+      if (transferCrystal.quantity === 0) {
+        accountInventory.value.items = accountInventory.value.items.filter(
+          item => item.item.id !== transferCrystal.item.id
+        )
+      }
+      
+      saveInventory()
+      
+      return {
+        success: true,
+        message: `成功转移技能 ${skill.name} 到目标角色，消耗1个技能转移水晶`
+      }
+    } catch (error) {
+      console.error('技能转移失败:', error)
+      return {
+        success: false,
+        message: '技能转移失败，请重试'
+      }
     }
   }
   
@@ -732,10 +951,18 @@ export function useAdventure(character: Character) {
     addDiamond,
     stopMpRegeneration,
     
+    // 道具栏相关
+    quickItemBar,
+    placeItemInQuickSlot,
+    removeItemFromQuickSlot,
+    useQuickItem,
+    
     // 技能相关
     useSkillBook,
+    transferSkillBook,
     transferSkillToCharacter,
     receiveTransferredSkills,
+    receiveTransferredSkillBooks,
     addLog
   }
 }
