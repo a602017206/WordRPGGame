@@ -269,6 +269,7 @@ export interface Enemy {
   defense: number
   experience: number
   goldReward: number
+  isQuestTarget?: boolean // 是否为任务目标怪物
 }
 
 /**
@@ -458,6 +459,113 @@ export interface CharacterEquipment {
     boots: EquippedItem | null
     accessory: EquippedItem | null
   }
+}
+
+// ==================== 地图探索系统相关类型 ====================
+
+/**
+ * 地图环境主题
+ */
+export type MapTheme = 'forest' | 'desert' | 'mountain' | 'cave' | 'swamp' | 'volcano' | 'ice' | 'ruins'
+
+/**
+ * 地图难度等级
+ */
+export type MapDifficulty = 'easy' | 'medium' | 'hard' | 'expert' | 'nightmare'
+
+/**
+ * 地图数据
+ */
+export interface GameMap {
+  id: string
+  name: string
+  description: string
+  theme: MapTheme
+  difficulty: MapDifficulty
+  icon: string
+  requiredLevel: number
+  requiredQuests: string[]
+  bossId: string
+  npcs: NPC[]
+  monsters: string[]
+  rewards: {
+    experience: number
+    gold: number
+    items: { itemId: string; quantity: number }[]
+  }
+}
+
+/**
+ * NPC类型
+ */
+export type NPCType = 'quest_giver' | 'merchant' | 'trainer' | 'story_teller'
+
+/**
+ * NPC数据
+ */
+export interface NPC {
+  id: string
+  name: string
+  description: string
+  type: NPCType
+  icon: string
+  dialogues: string[]
+  quests: string[]
+}
+
+/**
+ * 任务类型
+ */
+export type QuestType = 'kill' | 'collect' | 'explore' | 'boss'
+
+/**
+ * 任务目标
+ */
+export interface QuestObjective {
+  type: QuestType
+  targetId?: string
+  targetName?: string
+  quantity: number
+  description: string
+}
+
+/**
+ * 任务数据
+ */
+export interface Quest {
+  id: string
+  name: string
+  description: string
+  type: QuestType
+  objectives: QuestObjective[]
+  rewards: {
+    experience: number
+    gold: number
+    items: { itemId: string; quantity: number }[]
+  }
+  requiredLevel: number
+  requiredQuests: string[]
+}
+
+/**
+ * 玩家任务状态
+ */
+export interface PlayerQuest {
+  questId: string
+  status: 'not_started' | 'in_progress' | 'completed'
+  progress: Record<string, number> // 用于跟踪任务进度
+  acceptedAt: number
+}
+
+/**
+ * 玩家地图进度
+ */
+export interface PlayerMapProgress {
+  mapId: string
+  unlocked: boolean
+  completed: boolean
+  bestTime?: number
+  completionCount: number
 }
 
 // ==================== 技能系统相关类型 ====================

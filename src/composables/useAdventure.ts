@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
-import type { Character, Enemy, BattleLog, InventoryItem, Item, ItemRarity, ItemType, ItemBinding, CharacterInventory, AccountInventory, TransferResult, CharacterCurrency, AccountCurrency, SkillBook, Skill, QuickItemBar } from '../types'
+import type { Character, Enemy, BattleLog, InventoryItem, Item, ItemRarity, ItemType, ItemBinding, CharacterInventory, AccountInventory, TransferResult, CharacterCurrency, AccountCurrency, SkillBook, Skill, QuickItemBar, GameMap, NPC, Quest, PlayerQuest, PlayerMapProgress } from '../types'
 import { SKILL_DATABASE, createSkillBook } from './useSkills'
+import { MAPS, QUESTS } from '../data/maps'
 
 /**
  * 冒险系统 Composable
@@ -19,6 +20,10 @@ export function useAdventure(character: Character) {
   // 当前敌人
   const currentEnemy = ref<Enemy | null>(null)
   
+  // 多敌人遭遇系统
+  const encounteredEnemies = ref<Enemy[]>([])
+  const isSelectingEnemy = ref(false)
+  
   // 战斗日志
   const battleLogs = ref<BattleLog[]>([])
   
@@ -28,6 +33,12 @@ export function useAdventure(character: Character) {
   
   // MP自动回复定时器
   let mpRegenerationTimer: number | null = null
+  
+  // 地图探索系统数据
+  const currentMap = ref<GameMap | null>(null)
+  const playerQuests = ref<PlayerQuest[]>([])
+  const playerMaps = ref<PlayerMapProgress[]>([])
+  const currentNPC = ref<NPC | null>(null)
   
   // 角色背包
   const characterInventory = ref<CharacterInventory>({
@@ -73,7 +84,8 @@ export function useAdventure(character: Character) {
   
   // 生成随机敌人
   const generateEnemy = (): Enemy => {
-    const enemyTemplates = [
+    // 基础怪物模板
+    const basicEnemyTemplates = [
       { name: '史莱姆', icon: '🟢', baseHp: 30, baseAtk: 3, baseDef: 1 },
       { name: '哥布林', icon: '👺', baseHp: 40, baseAtk: 5, baseDef: 2 },
       { name: '骷髅战士', icon: '💀', baseHp: 50, baseAtk: 7, baseDef: 3 },
@@ -81,6 +93,63 @@ export function useAdventure(character: Character) {
       { name: '巨蜘蛛', icon: '🕷️', baseHp: 55, baseAtk: 8, baseDef: 4 },
       { name: '恶魔', icon: '😈', baseHp: 70, baseAtk: 10, baseDef: 5 }
     ]
+    
+    // 《山海经》神话生物模板
+    const shanhaijingTemplates = [
+      { name: '九尾狐', icon: '🦊', baseHp: 80, baseAtk: 12, baseDef: 6 },
+      { name: '饕餮', icon: '🐯', baseHp: 120, baseAtk: 15, baseDef: 8 },
+      { name: '穷奇', icon: '🦁', baseHp: 100, baseAtk: 14, baseDef: 7 },
+      { name: '梼杌', icon: '🐻', baseHp: 110, baseAtk: 13, baseDef: 9 },
+      { name: '混沌', icon: '👹', baseHp: 150, baseAtk: 18, baseDef: 10 },
+      { name: '应龙', icon: '🐉', baseHp: 200, baseAtk: 25, baseDef: 15 },
+      { name: '凤凰', icon: '🐦', baseHp: 180, baseAtk: 20, baseDef: 12 },
+      { name: '麒麟', icon: '🦄', baseHp: 160, baseAtk: 18, baseDef: 11 }
+    ]
+    
+    // 获取当前进行中的任务目标怪物
+    const activeQuestTargets = getActiveQuestTargets()
+    
+    // 根据角色等级和地图选择怪物模板
+    let enemyTemplates = basicEnemyTemplates
+    
+    // 如果有任务目标怪物，50%概率生成任务怪物
+    if (activeQuestTargets.length > 0 && Math.random() < 0.5) {
+      const targetName = activeQuestTargets[Math.floor(Math.random() * activeQuestTargets.length)]
+      const level = Math.max(1, character.level + Math.floor(Math.random() * 3) - 1)
+      
+      // 查找对应的怪物模板
+      let template = [...basicEnemyTemplates, ...shanhaijingTemplates].find(t => t.name === targetName)
+      
+      if (!template) {
+        // 如果没找到完全匹配的，尝试部分匹配
+        template = [...basicEnemyTemplates, ...shanhaijingTemplates].find(t => targetName.includes(t.name) || t.name.includes(targetName))
+      }
+      
+      if (template) {
+        const maxHp = Math.floor(template.baseHp * (1 + (level - 1) * 0.2))
+        return {
+          id: Date.now().toString(),
+          name: template.name,
+          level,
+          icon: template.icon,
+          hp: maxHp,
+          maxHp,
+          attack: Math.floor(template.baseAtk * (1 + (level - 1) * 0.15)),
+          defense: Math.floor(template.baseDef * (1 + (level - 1) * 0.1)),
+          experience: Math.floor(20 * level * (1 + level * 0.1)),
+          goldReward: Math.floor(10 * level * (1 + Math.random() * 0.5)),
+          isQuestTarget: true // 标记为任务目标怪物
+        }
+      }
+    }
+    
+    // 如果角色等级较高，增加神话生物出现概率
+    if (character.level >= 8) {
+      // 70%概率出现神话生物，30%概率出现基础怪物
+      if (Math.random() < 0.7) {
+        enemyTemplates = shanhaijingTemplates
+      }
+    }
     
     const template = enemyTemplates[Math.floor(Math.random() * enemyTemplates.length)]
     const level = Math.max(1, character.level + Math.floor(Math.random() * 3) - 1)
@@ -97,8 +166,31 @@ export function useAdventure(character: Character) {
       attack: Math.floor(template.baseAtk * (1 + (level - 1) * 0.15)),
       defense: Math.floor(template.baseDef * (1 + (level - 1) * 0.1)),
       experience: Math.floor(20 * level * (1 + level * 0.1)),
-      goldReward: Math.floor(10 * level * (1 + Math.random() * 0.5))
+      goldReward: Math.floor(10 * level * (1 + Math.random() * 0.5)),
+      isQuestTarget: false
     }
+  }
+  
+  // 获取当前进行中任务的目标怪物名称列表
+  const getActiveQuestTargets = (): string[] => {
+    const targets: string[] = []
+    
+    playerQuests.value.forEach((playerQuest: PlayerQuest) => {
+      if (playerQuest.status !== 'in_progress') return
+      
+      const quest = QUESTS.find((q: Quest) => q.id === playerQuest.questId)
+      if (!quest || (quest.type !== 'kill' && quest.type !== 'boss')) return
+      
+      quest.objectives.forEach((objective: any) => {
+        if (objective.type === 'kill' || objective.type === 'boss') {
+          if (objective.targetName) {
+            targets.push(objective.targetName)
+          }
+        }
+      })
+    })
+    
+    return targets
   }
   
   // 开始战斗
@@ -107,6 +199,52 @@ export function useAdventure(character: Character) {
     isBattling.value = true
     isVictory.value = false
     addLog(`遭遇了 Lv.${currentEnemy.value.level} ${currentEnemy.value.icon} ${currentEnemy.value.name}！`, 'info')
+  }
+  
+  // 生成多个敌人（寻敌功能使用）
+  const generateMultipleEnemies = (): Enemy[] => {
+    const enemyCount = 3 + Math.floor(Math.random() * 3) // 3-5个敌人
+    const enemies: Enemy[] = []
+    
+    for (let i = 0; i < enemyCount; i++) {
+      enemies.push(generateEnemy())
+      // 等待一小段时间以确保每个敌人ID不同
+      if (i < enemyCount - 1) {
+        const now = Date.now()
+        while (Date.now() === now) {}
+      }
+    }
+    
+    return enemies
+  }
+  
+  // 寻找敌人（多敌人遭遇）
+  const findEnemies = () => {
+    if (isBattling.value) {
+      addLog('正在战斗中，无法寻找新敌人！', 'info')
+      return
+    }
+    
+    encounteredEnemies.value = generateMultipleEnemies()
+    isSelectingEnemy.value = true
+    addLog(`遭遇了 ${encounteredEnemies.value.length} 个敌人，请选择一个开始战斗！`, 'info')
+  }
+  
+  // 选择敌人开始战斗
+  const selectEnemy = (enemy: Enemy) => {
+    currentEnemy.value = enemy
+    isBattling.value = true
+    isVictory.value = false
+    isSelectingEnemy.value = false
+    encounteredEnemies.value = []
+    addLog(`选择了 Lv.${enemy.level} ${enemy.icon} ${enemy.name} 作为战斗目标！`, 'info')
+  }
+  
+  // 取消选择敌人
+  const cancelEnemySelection = () => {
+    isSelectingEnemy.value = false
+    encounteredEnemies.value = []
+    addLog('放弃了本次遭遇', 'info')
   }
   
   // 计算伤害
@@ -210,6 +348,12 @@ export function useAdventure(character: Character) {
     
     // 随机掉落道具
     dropRandomItem()
+    
+    // 更新任务进度（击败怪物类型的任务）
+    updateQuestProgressOnEnemyDefeat(currentEnemy.value.name)
+    
+    // 检查任务是否完成
+    checkQuestCompletion()
     
     isBattling.value = false
     isVictory.value = true
@@ -396,6 +540,9 @@ export function useAdventure(character: Character) {
         acquiredAt: Date.now()
       })
     }
+    
+    // 更新收集任务进度
+    updateQuestProgressOnItemCollect(item.id, quantity)
     
     saveInventory()
   }
@@ -907,9 +1054,246 @@ export function useAdventure(character: Character) {
     }
   }
   
+  // 地图探索系统方法
+  
+  // 获取玩家任务
+  const getPlayerQuests = () => {
+    return playerQuests.value
+  }
+  
+  // 接受任务
+  const acceptQuest = (questId: string) => {
+    const existingQuest = playerQuests.value.find(q => q.questId === questId)
+    if (existingQuest) {
+      addLog('你已经接受了这个任务', 'info')
+      return false
+    }
+    
+    playerQuests.value.push({
+      questId,
+      status: 'in_progress',
+      progress: {},
+      acceptedAt: Date.now()
+    })
+    
+    savePlayerData()
+    addLog('任务接受成功', 'victory')
+    return true
+  }
+  
+  // 完成任务
+  const completeQuest = (questId: string) => {
+    const quest = playerQuests.value.find(q => q.questId === questId)
+    if (quest) {
+      quest.status = 'completed'
+      savePlayerData()
+      addLog('任务完成', 'victory')
+      
+      // 检查是否有新的地图可以解锁
+      checkMapUnlockConditions()
+      
+      return true
+    }
+    return false
+  }
+  
+  // 更新任务进度
+  const updateQuestProgress = (questId: string, objectiveKey: string, increment: number = 1) => {
+    const quest = playerQuests.value.find(q => q.questId === questId)
+    if (quest && quest.status === 'in_progress') {
+      if (!quest.progress[objectiveKey]) {
+        quest.progress[objectiveKey] = 0
+      }
+      quest.progress[objectiveKey] += increment
+      savePlayerData()
+    }
+  }
+  
+  // 更新收集道具类型任务的进度
+  const updateQuestProgressOnItemCollect = (itemId: string, quantity: number = 1) => {
+    // 查找所有进行中的收集任务
+    playerQuests.value.forEach((playerQuest: PlayerQuest) => {
+      if (playerQuest.status !== 'in_progress') return
+      
+      // 查找任务数据
+      const quest = QUESTS.find((q: Quest) => q.id === playerQuest.questId)
+      if (!quest) return
+      
+      // 检查是否为收集任务
+      if (quest.type !== 'collect') return
+      
+      // 检查任务目标是否匹配当前收集的道具
+      quest.objectives.forEach((objective: any) => {
+        if (objective.type === 'collect' && objective.targetId === itemId) {
+          updateQuestProgress(quest.id, itemId, quantity)
+          addLog(`任务进度更新：收集了${objective.description}`, 'info')
+        }
+      })
+    })
+  }
+  
+  // 更新击败敌人类型任务的进度
+  const updateQuestProgressOnEnemyDefeat = (enemyName: string) => {
+    // 查找所有进行中的击杀任务
+    playerQuests.value.forEach((playerQuest: PlayerQuest) => {
+      if (playerQuest.status !== 'in_progress') return
+      
+      // 查找任务数据
+      const quest = QUESTS.find((q: Quest) => q.id === playerQuest.questId)
+      if (!quest) return
+      
+      // 检查是否为击杀任务
+      if (quest.type !== 'kill' && quest.type !== 'boss') return
+      
+      // 检查任务目标是否匹配当前击败的敌人
+      quest.objectives.forEach((objective: any) => {
+        if (objective.type === 'kill' || objective.type === 'boss') {
+          // 检查敌人名称是否匹配
+          if (objective.targetName && enemyName.includes(objective.targetName)) {
+            updateQuestProgress(quest.id, objective.targetName, 1)
+            addLog(`任务进度更新：击败了${enemyName}`, 'info')
+          }
+          // 如果没有指定具体敌人名称，任何击败都算进度
+          else if (!objective.targetName) {
+            updateQuestProgress(quest.id, 'defeat', 1)
+            addLog(`任务进度更新：击败了敌人`, 'info')
+          }
+        }
+      })
+    })
+  }
+  
+  // 检查任务是否完成
+  const checkQuestCompletion = () => {
+    // 遍历所有进行中的任务
+    playerQuests.value.forEach((playerQuest: PlayerQuest) => {
+      if (playerQuest.status !== 'in_progress') return
+      
+      // 查找任务数据
+      const quest = QUESTS.find((q: Quest) => q.id === playerQuest.questId)
+      if (!quest) return
+      
+      // 检查所有目标是否完成
+      let allObjectivesCompleted = true
+      
+      for (const objective of quest.objectives) {
+        const progress = playerQuest.progress[objective.targetName || objective.type] || 0
+        if (progress < objective.quantity) {
+          allObjectivesCompleted = false
+          break
+        }
+      }
+      
+      // 如果所有目标都完成，自动完成任务
+      if (allObjectivesCompleted) {
+        completeQuest(quest.id)
+        addLog(`任务完成：${quest.name}`, 'victory')
+      }
+    })
+  }
+  
+  // 检查任务是否完成
+  const isQuestCompleted = (questId: string) => {
+    const quest = playerQuests.value.find(q => q.questId === questId)
+    return quest ? quest.status === 'completed' : false
+  }
+  
+  // 检查任务是否已接受
+  const isQuestAccepted = (questId: string) => {
+    const quest = playerQuests.value.find(q => q.questId === questId)
+    return quest ? quest.status === 'in_progress' || quest.status === 'completed' : false
+  }
+  
+  // 获取地图进度
+  const getMapProgress = () => {
+    return playerMaps.value
+  }
+  
+  // 解锁地图
+  const unlockMap = (mapId: string) => {
+    const existingMap = playerMaps.value.find(m => m.mapId === mapId)
+    if (existingMap) {
+      existingMap.unlocked = true
+    } else {
+      playerMaps.value.push({
+        mapId,
+        unlocked: true,
+        completed: false,
+        completionCount: 0
+      })
+    }
+    savePlayerData()
+  }
+  
+  // 完成地图
+  const completeMap = (mapId: string) => {
+    const mapProgress = playerMaps.value.find(m => m.mapId === mapId)
+    if (mapProgress) {
+      mapProgress.completed = true
+      mapProgress.completionCount++
+      savePlayerData()
+    }
+  }
+  
+  // 检查地图是否解锁
+  const isMapUnlocked = (mapId: string) => {
+    const mapProgress = playerMaps.value.find(m => m.mapId === mapId)
+    return mapProgress ? mapProgress.unlocked : false
+  }
+  
+  // 检查地图是否完成
+  const isMapCompleted = (mapId: string) => {
+    const mapProgress = playerMaps.value.find(m => m.mapId === mapId)
+    return mapProgress ? mapProgress.completed : false
+  }
+  
+  // 检查地图解锁条件
+  const checkMapUnlockConditions = () => {
+    // 遍历所有地图，检查是否有新的地图可以解锁
+    MAPS.forEach((map: GameMap) => {
+      // 如果地图已经解锁，跳过
+      if (isMapUnlocked(map.id)) return
+      
+      // 检查等级要求
+      if (character.level < map.requiredLevel) return
+      
+      // 检查前置任务要求
+      const allQuestsCompleted = map.requiredQuests.every((questId: string) => isQuestCompleted(questId))
+      if (allQuestsCompleted) {
+        // 自动解锁地图
+        unlockMap(map.id)
+        addLog(`新地图解锁：${map.name}`, 'victory')
+      }
+    })
+  }
+  
+  // 保存玩家数据
+  const savePlayerData = () => {
+    const playerData = {
+      quests: playerQuests.value,
+      maps: playerMaps.value
+    }
+    localStorage.setItem(`player_data_${character.id}`, JSON.stringify(playerData))
+  }
+  
+  // 加载玩家数据
+  const loadPlayerData = () => {
+    const savedData = localStorage.getItem(`player_data_${character.id}`)
+    if (savedData) {
+      try {
+        const data = JSON.parse(savedData)
+        playerQuests.value = data.quests || []
+        playerMaps.value = data.maps || []
+      } catch (error) {
+        console.error('加载玩家数据失败:', error)
+      }
+    }
+  }
+  
   // 初始化
   loadInventory()
   loadCurrency() // 加载货币数据
+  loadPlayerData() // 加载玩家数据
   // 启动MP自动回复
   startMpRegeneration()
   
@@ -920,11 +1304,15 @@ export function useAdventure(character: Character) {
     gold,
     diamond,
     currentEnemy,
+    encounteredEnemies,
+    isSelectingEnemy,
     battleLogs,
     isBattling,
     isVictory,
     characterInventory,
     accountInventory,
+    currentMap,
+    currentNPC,
     
     // 计算属性
     hpPercentage,
@@ -935,6 +1323,9 @@ export function useAdventure(character: Character) {
     
     // 方法
     startBattle,
+    findEnemies,
+    selectEnemy,
+    cancelEnemySelection,
     playerAttack,
     useSkill,
     rest,
@@ -963,6 +1354,19 @@ export function useAdventure(character: Character) {
     transferSkillToCharacter,
     receiveTransferredSkills,
     receiveTransferredSkillBooks,
-    addLog
+    addLog,
+    
+    // 地图探索系统
+    getPlayerQuests,
+    acceptQuest,
+    completeQuest,
+    updateQuestProgress,
+    isQuestCompleted,
+    isQuestAccepted,
+    getMapProgress,
+    unlockMap,
+    completeMap,
+    isMapUnlocked,
+    isMapCompleted
   }
 }

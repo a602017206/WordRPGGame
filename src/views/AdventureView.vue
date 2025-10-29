@@ -658,6 +658,11 @@ const goToShop = () => {
   router.push(`/shop/${characterId.value}`)
 }
 
+// 前往地图探索
+const goToMapExplorer = () => {
+  router.push(`/map-explorer/${characterId.value}`)
+}
+
 </script>
 
 <template>
@@ -669,6 +674,9 @@ const goToShop = () => {
       <div class="header-actions">
         <button @click="goToShop" class="btn-shop">
           🏪 商城
+        </button>
+        <button @click="goToMapExplorer" class="btn-map">
+          🗺️ 地图
         </button>
         <button @click="showInventory = !showInventory" class="btn-inventory">
           🎒 背包
@@ -763,11 +771,67 @@ const goToShop = () => {
         <div class="battle-area">
           <h3 class="section-title">⚔️ 战斗区域</h3>
           
+          <!-- 敌人选择界面 -->
+          <div v-if="adventure.isSelectingEnemy.value" class="enemy-selection-panel">
+            <div class="selection-header">
+              <h4>🎯 选择你的对手</h4>
+              <p>遭遇了 {{ adventure.encounteredEnemies.value.length }} 个敌人，请选择一个开始战斗！</p>
+            </div>
+            
+            <div class="enemy-grid">
+              <div 
+                v-for="enemy in adventure.encounteredEnemies.value" 
+                :key="enemy.id"
+                class="enemy-choice-card"
+                :class="{ 'quest-target': enemy.isQuestTarget }"
+                @click="adventure.selectEnemy(enemy)"
+              >
+                <div class="enemy-icon-large">{{ enemy.icon }}</div>
+                <div class="enemy-details">
+                  <div class="enemy-name">
+                    {{ enemy.name }}
+                    <span v-if="enemy.isQuestTarget" class="quest-badge" title="任务目标">🎯</span>
+                  </div>
+                  <div class="enemy-level">Lv.{{ enemy.level }}</div>
+                  <div class="enemy-stats">
+                    <div class="stat-item">
+                      <span class="stat-icon">❤️</span>
+                      <span>{{ enemy.maxHp }}</span>
+                    </div>
+                    <div class="stat-item">
+                      <span class="stat-icon">⚔️</span>
+                      <span>{{ enemy.attack }}</span>
+                    </div>
+                    <div class="stat-item">
+                      <span class="stat-icon">🛡️</span>
+                      <span>{{ enemy.defense }}</span>
+                    </div>
+                  </div>
+                  <div class="enemy-rewards">
+                    <span class="reward-item">⭐ {{ enemy.experience }} EXP</span>
+                    <span class="reward-item">💰 {{ enemy.goldReward }} 金币</span>
+                  </div>
+                </div>
+                <button class="btn-select-enemy">选择战斗</button>
+              </div>
+            </div>
+            
+            <button 
+              @click="adventure.cancelEnemySelection()"
+              class="btn-cancel-selection"
+            >
+              放弃遭遇
+            </button>
+          </div>
+          
           <!-- 敌人信息 -->
           <div v-if="adventure.currentEnemy.value" class="enemy-card">
             <div class="enemy-icon">{{ adventure.currentEnemy.value.icon }}</div>
             <div class="enemy-info">
-              <h4>{{ adventure.currentEnemy.value.name }}</h4>
+              <h4>
+                {{ adventure.currentEnemy.value.name }}
+                <span v-if="adventure.currentEnemy.value.isQuestTarget" class="quest-badge" title="任务目标">🎯</span>
+              </h4>
               <div class="enemy-level">Lv.{{ adventure.currentEnemy.value.level }}</div>
             </div>
             
@@ -785,8 +849,8 @@ const goToShop = () => {
           <!-- 战斗按钮 -->
           <div class="battle-actions">
             <button 
-              v-if="!adventure.isBattling.value" 
-              @click="adventure.startBattle()"
+              v-if="!adventure.isBattling.value && !adventure.isSelectingEnemy.value" 
+              @click="adventure.findEnemies()"
               class="btn-action btn-start-battle"
             >
               🎯 寻找敌人
@@ -1506,6 +1570,185 @@ const goToShop = () => {
 
 .enemy-hp-bar {
   flex: 2;
+}
+
+/* 敌人选择界面 */
+.enemy-selection-panel {
+  background: rgba(0, 0, 0, 0.4);
+  border: 2px solid rgba(102, 126, 234, 0.3);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.selection-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.selection-header h4 {
+  margin: 0 0 0.5rem 0;
+  color: #fff;
+  font-size: 1.3rem;
+}
+
+.selection-header p {
+  margin: 0;
+  color: #aaa;
+  font-size: 0.95rem;
+}
+
+.enemy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.enemy-choice-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 1.25rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.enemy-choice-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(102, 126, 234, 0.6);
+  background: rgba(102, 126, 234, 0.1);
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+}
+
+.enemy-choice-card.quest-target {
+  border-color: rgba(255, 215, 0, 0.5);
+  background: rgba(255, 215, 0, 0.05);
+}
+
+.enemy-choice-card.quest-target:hover {
+  border-color: rgba(255, 215, 0, 0.8);
+  background: rgba(255, 215, 0, 0.15);
+  box-shadow: 0 8px 20px rgba(255, 215, 0, 0.4);
+}
+
+.enemy-icon-large {
+  font-size: 3.5rem;
+  line-height: 1;
+  margin-bottom: 0.5rem;
+}
+
+.enemy-details {
+  width: 100%;
+  text-align: center;
+}
+
+.enemy-name {
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #fff;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.quest-badge {
+  background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+  color: #000;
+  padding: 0.2rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: bold;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.enemy-stats {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin: 0.75rem 0;
+  flex-wrap: wrap;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #ddd;
+  font-size: 0.9rem;
+}
+
+.stat-icon {
+  font-size: 1rem;
+}
+
+.enemy-rewards {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: #aaa;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.reward-item {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+}
+
+.btn-select-enemy {
+  width: 100%;
+  padding: 0.75rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  margin-top: 0.5rem;
+}
+
+.btn-select-enemy:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-cancel-selection {
+  width: 100%;
+  padding: 1rem;
+  background: rgba(245, 87, 108, 0.2);
+  color: #f5576c;
+  border: 1px solid rgba(245, 87, 108, 0.3);
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.btn-cancel-selection:hover {
+  background: rgba(245, 87, 108, 0.3);
+  transform: translateY(-2px);
 }
 
 /* 战斗按钮 */

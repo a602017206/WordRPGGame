@@ -59,9 +59,16 @@ const goBack = (): void => {
 const startAdventure = (): void => {
   if (!character.value) return
   
-  if (confirm(`确认使用当前角色"${character.value.name}"进入冒险吗？`)) {
+  if (confirm(`确认使用当前角色“${character.value.name}”进入冒险吗？`)) {
     router.push(`/adventure/${character.value.id}`)
   }
+}
+
+// 地图探索
+const goToMapExplorer = (): void => {
+  if (!character.value) return
+  
+  router.push(`/map-explorer/${character.value.id}`)
 }
 </script>
 
@@ -208,6 +215,9 @@ const startAdventure = (): void => {
         <div class="action-buttons">
           <button @click="startAdventure" class="btn-adventure">
             ⚔️ 开始冒险
+          </button>
+          <button @click="goToMapExplorer" class="btn-map-explorer">
+            🗺️ 地图探索
           </button>
           <button @click="handleDelete" class="btn-delete-large">
             🗑️ 删除角色
@@ -513,6 +523,7 @@ const startAdventure = (): void => {
   justify-content: center;
   gap: 1rem;
   margin-top: 1rem;
+  flex-wrap: wrap;
 }
 
 .btn-adventure {
@@ -525,11 +536,30 @@ const startAdventure = (): void => {
   transition: all 0.3s ease;
   font-size: 1rem;
   font-weight: 500;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 
 .btn-adventure:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn-map-explorer {
+  padding: 1rem 2rem;
+  background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 1rem;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+}
+
+.btn-map-explorer:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
 }
 
 .btn-delete-large {

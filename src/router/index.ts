@@ -5,6 +5,7 @@ import CharacterCreationView from '../views/CharacterCreationView.vue'
 import CharacterDetailView from '../views/CharacterDetailView.vue'
 import AdventureView from '../views/AdventureView.vue'
 import ShopView from '../views/ShopView.vue'
+import MapExplorerView from '../views/MapExplorerView.vue'
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -53,6 +54,14 @@ const routes: Array<RouteRecordRaw> = [
     component: ShopView,
     meta: {
       title: '商城系统'
+    }
+  },
+  {
+    path: '/map-explorer/:id',
+    name: 'MapExplorer',
+    component: MapExplorerView,
+    meta: {
+      title: '地图探索'
     }
   },
   {

@@ -49,10 +49,12 @@ const goToCreateCharacter = (): void => {
         <span class="badge-label">角色总数</span>
         <span class="badge-value">{{ characterCount }}</span>
       </div>
-      <button @click="goToCreateCharacter" class="btn-create-character">
-        <span class="btn-icon">✨</span>
-        <span class="btn-text">创建新角色</span>
-      </button>
+      <div class="actions">
+        <button @click="goToCreateCharacter" class="btn-create-character">
+          <span class="btn-icon">✨</span>
+          <span class="btn-text">创建新角色</span>
+        </button>
+      </div>
     </div>
 
     <div class="content-container">
@@ -151,6 +153,11 @@ const goToCreateCharacter = (): void => {
   box-shadow: var(--shadow-md);
 }
 
+.actions {
+  display: flex;
+  gap: 1rem;
+}
+
 .btn-icon {
   font-size: 1.1rem;
 }
@@ -184,6 +191,11 @@ const goToCreateCharacter = (): void => {
   .btn-create-character {
     width: 100%;
     justify-content: center;
+  }
+  
+  .actions {
+    width: 100%;
+    flex-direction: column;
   }
 
   .content-container {
